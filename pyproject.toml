@@ -22,7 +22,8 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint.per-file-ignores]
-"spikes/**" = ["E402"]  # load_dotenv() intentionally runs before importing google libs
+# spikes are exploratory day-0 scripts — relax import/statement layout rules
+"spikes/**" = ["E401", "E402", "E702"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
