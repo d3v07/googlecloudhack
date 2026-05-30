@@ -1,0 +1,29 @@
+[project]
+name = "gcrah"
+version = "0.1.0"
+description = "Evidence-Driven DBRE Agent — Gemini + MongoDB performance engineer"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "google-genai>=1.0",
+    "pydantic>=2.0",
+]
+
+# Agent framework (google-adk) is intentionally NOT pinned here yet —
+# issue #1 decides Agent Builder vs Agent Engine first. Added after that lands.
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+"spikes/**" = ["E402"]  # load_dotenv() intentionally runs before importing google libs
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
