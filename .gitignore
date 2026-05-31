@@ -14,6 +14,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .uv/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
 # node
 node_modules/
