@@ -23,5 +23,6 @@ node_modules/
 
 # internal — kept local, not pushed to the shared repo
 HANDOFF.md
-docs/
+docs/*
+!docs/deploy.md
 mongo-build-plan.md
