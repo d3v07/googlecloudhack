@@ -16,7 +16,9 @@ _VOLATILE_KEYS = {
 
 
 def evidence_hash(evidence: Any) -> str:
-    canonical = _canonical_collection(evidence) if _is_collection(evidence) else _canonical(evidence)
+    canonical = (
+        _canonical_collection(evidence) if _is_collection(evidence) else _canonical(evidence)
+    )
     payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 

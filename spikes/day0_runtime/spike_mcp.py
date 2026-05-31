@@ -5,6 +5,7 @@ Proves (#1) ADK can load the MongoDB MCP server as a tool source, and
 
 Run: uv run --with google-adk --with mcp --with python-dotenv python spikes/day0_runtime/spike_mcp.py
 """
+
 import asyncio
 import os
 
@@ -14,8 +15,17 @@ load_dotenv()
 
 CONN = os.environ["MDB_MCP_CONNECTION_STRING"]
 SERVER_ENV = {**os.environ, "MDB_MCP_CONNECTION_STRING": CONN}
-NEEDED = ["find", "aggregate", "count", "collection-schema", "collection-indexes",
-          "create-index", "explain", "list-databases", "list-collections"]
+NEEDED = [
+    "find",
+    "aggregate",
+    "count",
+    "collection-schema",
+    "collection-indexes",
+    "create-index",
+    "explain",
+    "list-databases",
+    "list-collections",
+]
 
 
 async def via_adk():
@@ -23,10 +33,14 @@ async def via_adk():
     from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
     from mcp import StdioServerParameters
 
-    toolset = MCPToolset(connection_params=StdioConnectionParams(
-        server_params=StdioServerParameters(command="npx", args=["-y", "mongodb-mcp-server"], env=SERVER_ENV),
-        timeout=90,
-    ))
+    toolset = MCPToolset(
+        connection_params=StdioConnectionParams(
+            server_params=StdioServerParameters(
+                command="npx", args=["-y", "mongodb-mcp-server"], env=SERVER_ENV
+            ),
+            timeout=90,
+        )
+    )
     try:
         tools = await toolset.get_tools()
         names = sorted(t.name for t in tools)

@@ -53,7 +53,9 @@ def test_models_are_frozen():
 
 def test_finding_recommendation_and_decision_validate():
     finding = Finding(problem="collection scan", severity=Severity.HIGH, evidence_refs=("abc",))
-    recommendation = Recommendation(index_spec={"tenant": 1, "status": 1}, rationale="covers filter")
+    recommendation = Recommendation(
+        index_spec={"tenant": 1, "status": 1}, rationale="covers filter"
+    )
     decision = Decision(
         action=DecisionAction.APPROVE,
         evidence_hash="a" * 64,
