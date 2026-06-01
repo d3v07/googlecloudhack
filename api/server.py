@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import FastAPI
 
 from api.routes import PackStore, get_store, router
-from controller.persistence import load_pack, read_pack
+from controller.persistence import load_pack, read_pack, save_pack, write_pack
 from controller.schemas import EvidencePack
 
 
@@ -20,6 +20,9 @@ class MongoPackStore:
     def get_pack(self, run_id: str) -> EvidencePack | None:
         return load_pack(self._col, run_id)
 
+    def save_pack(self, pack: EvidencePack) -> None:
+        save_pack(self._col, pack)
+
 
 class LocalFilePackStore:
     def __init__(self, directory: Path) -> None:
@@ -32,6 +35,9 @@ class LocalFilePackStore:
         path = self._dir / f"{run_id}.json"
         return read_pack(path) if path.exists() else None
 
+    def save_pack(self, pack: EvidencePack) -> None:
+        write_pack(pack, self._dir)
+
 
 class _EmptyPackStore:
     def list_packs(self) -> list[EvidencePack]:
@@ -39,6 +45,9 @@ class _EmptyPackStore:
 
     def get_pack(self, run_id: str) -> EvidencePack | None:
         return None
+
+    def save_pack(self, pack: EvidencePack) -> None:
+        raise NotImplementedError("_EmptyPackStore cannot persist packs")
 
 
 def create_app(store: PackStore | None = None) -> FastAPI:
