@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from controller.backends import Backend
 from controller.diagnosis import diagnose
+from controller.narrate import Narrator
 from controller.pack import build_pack, pack_evidence_hash
 from controller.phases import Phase, assert_phase_transition
 from controller.schemas import (
@@ -31,6 +32,7 @@ async def run_remediation(
     query_sort: list[tuple[str, int]],
     limit: int,
     created_at: str | None = None,
+    narrator: Narrator | None = None,
 ) -> EvidencePack:
     if created_at is None:
         created_at = datetime.now(timezone.utc).isoformat()
@@ -78,7 +80,7 @@ async def run_remediation(
 
     status = PackStatus.VERIFIED if not after.metrics.has_blocking_sort else PackStatus.DIAGNOSED
 
-    return build_pack(
+    pack = build_pack(
         run_id=run_id,
         namespace=namespace,
         created_at=created_at,
@@ -90,3 +92,6 @@ async def run_remediation(
         decision=decision,
         phase_log=phase_log,
     )
+    if narrator is not None:
+        pack = pack.model_copy(update={"narrative": narrator.narrate(pack)})
+    return pack

@@ -34,6 +34,7 @@ def build_pack(
     after: Evidence | None = None,
     decision: Decision | None = None,
     phase_log: Sequence[PhaseTransition] = (),
+    narrative: str | None = None,
 ) -> EvidencePack:
     return EvidencePack(
         run_id=run_id,
@@ -47,4 +48,5 @@ def build_pack(
         decision=decision,
         phase_log=tuple(phase_log),
         evidence_hash=pack_evidence_hash(before, recommendation),
+        narrative=narrative,
     )

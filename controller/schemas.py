@@ -154,6 +154,8 @@ class EvidencePack(BaseModel):
     evidence_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
     created_at: str = Field(min_length=1)
 
+    narrative: str | None = None
+
     @model_validator(mode="after")
     def _decision_hash_binds_this_pack(self) -> "EvidencePack":
         if self.decision is not None and self.decision.evidence_hash != self.evidence_hash:

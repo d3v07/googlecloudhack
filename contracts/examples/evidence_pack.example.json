@@ -51,6 +51,7 @@
     "severity": "high"
   },
   "namespace": "sample_supplies.sales_agent_demo",
+  "narrative": null,
   "phase_log": [],
   "recommendation": {
     "index_spec": [

@@ -96,7 +96,9 @@ def test_committed_example_validates_against_the_contract():
     assert pack.version == "v1"
     assert pack.status is PackStatus.DIAGNOSED
     assert pack.recommendation.index_spec[0] == ("storeLocation", 1)
+    assert pack.narrative is None  # example keeps narrative unset
 
 
 def test_committed_schema_is_in_sync_with_the_model():
     assert json.loads(SCHEMA.read_text()) == EvidencePack.model_json_schema()
+    assert "narrative" in EvidencePack.model_json_schema()["properties"]
