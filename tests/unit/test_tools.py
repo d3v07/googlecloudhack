@@ -83,5 +83,7 @@ def test_extract_explain_json_pulls_queryplanner_from_prose_wrapper():
 
 
 def test_extract_explain_json_raises_when_no_queryplanner():
+    # includes a non-decoding "{" (exercises the JSONDecodeError skip) and a valid
+    # object that lacks queryPlanner — neither yields a usable explain
     with pytest.raises(ValueError):
-        extract_explain_json("just prose, no json here {\"unrelated\": 1}")
+        extract_explain_json('prose with a bare { brace and {"unrelated": 1} only')
