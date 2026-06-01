@@ -1,17 +1,22 @@
-import { Database, GitBranch } from "@phosphor-icons/react/dist/ssr";
+import { Database, GitBranch, WifiHigh, WifiSlash } from "@phosphor-icons/react/dist/ssr";
 import { StageIndicator } from "@/components/StageIndicator";
 import { PlanPanel } from "@/components/PlanPanel";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { ApproveBar } from "@/components/ApproveBar";
-import type { EvidencePack } from "@/lib/evidence";
-import packData from "@/lib/example_pack.json";
+import { loadPack } from "@/lib/api";
 import styles from "./page.module.css";
 
-// Static for now: the committed example pack (the ESR B->C scenario). Day 3+
-// swaps this for the live read endpoint (#18). The contract is identical.
-const pack = packData as unknown as EvidencePack;
+// Async server component: reads a pack from the live read API (#18/#31), falling
+// back to the committed example when no API is configured or it is unreachable.
+// `run_id` comes from the ?run_id= query param (or NEXT_PUBLIC_PACK_ID env).
+export default async function AgentRunPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ run_id?: string }>;
+}) {
+  const { run_id } = await searchParams;
+  const { pack, source, notice } = await loadPack(run_id);
 
-export default function AgentRunPage() {
   return (
     <main className={styles.main}>
       <header className={styles.topbar}>
@@ -28,6 +33,10 @@ export default function AgentRunPage() {
           <span className={styles.status} data-status={pack.status}>
             {pack.status}
           </span>
+          <span className={styles.source} data-source={source} title={notice ?? "Live read API"}>
+            {source === "live" ? <WifiHigh size={13} /> : <WifiSlash size={13} />}
+            {source}
+          </span>
         </div>
       </header>
 
@@ -41,8 +50,10 @@ export default function AgentRunPage() {
       <ApproveBar evidenceHash={pack.evidence_hash} status={pack.status} />
 
       <footer className={styles.footer}>
-        EvidencePack <code>{pack.version}</code> · rendered statically from the committed
-        example · live data arrives via the read endpoint (#18)
+        EvidencePack <code>{pack.version}</code>
+        {source === "live"
+          ? " · live from the read API"
+          : ` · ${notice ?? "showing the bundled example"}`}
       </footer>
     </main>
   );

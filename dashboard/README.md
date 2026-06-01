@@ -19,9 +19,28 @@ Build check: `npm run build`.
 Per [`../contracts/README.md`](../contracts/README.md) the dashboard consumes
 **`EvidencePack` JSON only** — the type lives in [`lib/evidence.ts`](lib/evidence.ts),
 mirroring `contracts/evidence_pack.schema.json`. It does **not** import
-`controller/`, `agents/`, or any backend module. For now the page reads the
-committed example pack (`lib/example_pack.json`); Day 3+ swaps that for the live
-read endpoint (#18) with no shape change.
+`controller/`, `agents/`, or any backend module.
+
+## Data source (#25)
+
+The page loads a pack via [`lib/api.ts`](lib/api.ts) → `loadPack()`:
+
+1. If `NEXT_PUBLIC_API_URL` is set, it fetches `GET {API_URL}/packs/{run_id}`
+   (`cache: no-store`).
+2. `run_id` comes from the `?run_id=` query param, else `NEXT_PUBLIC_PACK_ID`,
+   else the example pack's own id.
+3. On **any** failure — unset URL, 404, non-OK, or network error — it falls back
+   to the committed `lib/example_pack.json` and shows a notice in the footer. A
+   `live`/`fallback` chip in the header reflects which source rendered.
+
+This means it works today with zero config (fallback) and **auto-upgrades to live
+data** the moment `NEXT_PUBLIC_API_URL` points at the deployed read API (#31) —
+no component or contract changes.
+
+| Env var | Purpose |
+|---------|---------|
+| `NEXT_PUBLIC_API_URL` | Base URL of the read API (#31). Unset → fallback mode. |
+| `NEXT_PUBLIC_PACK_ID` | Default `run_id` to request when none is in the URL. |
 
 ## Visual identity (non-default — AC requirement)
 
