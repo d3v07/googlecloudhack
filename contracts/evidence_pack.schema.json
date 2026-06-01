@@ -76,6 +76,11 @@
           "title": "Docs Returned",
           "type": "integer"
         },
+        "has_blocking_sort": {
+          "readOnly": true,
+          "title": "Has Blocking Sort",
+          "type": "boolean"
+        },
         "millis": {
           "minimum": 0,
           "title": "Millis",
