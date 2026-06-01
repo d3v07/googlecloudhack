@@ -67,7 +67,6 @@ class GeminiNarrator:
             config=types.GenerateContentConfig(
                 max_output_tokens=512,
                 temperature=0.2,
-                thinking_config=types.ThinkingConfig(thinking_level="minimal"),
             ),
         )
         if response.text:
