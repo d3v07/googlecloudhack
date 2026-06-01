@@ -80,6 +80,29 @@
   background: var(--red-dim);
 }
 
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 99px;
+  cursor: help;
+}
+
+.source[data-source="live"] {
+  color: var(--green);
+  background: var(--green-dim);
+}
+
+.source[data-source="fallback"] {
+  color: var(--text-faint);
+  background: var(--bg-elevated);
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
