@@ -88,6 +88,9 @@ def get_uri() -> str:
     uri = os.environ.get("MONGODB_TARGET_URI")
     if uri:
         return uri
+    uri = os.environ.get("MDB_MCP_CONNECTION_STRING")
+    if uri:
+        return uri
     user = os.environ.get("MONGODB_VERIFY_USER")
     pw = os.environ.get("MONGODB_VERIFY_PW")
     if user and pw:
@@ -96,7 +99,8 @@ def get_uri() -> str:
             "?retryWrites=true&w=majority"
         )
     sys.exit(
-        "No connection string. Set MONGODB_TARGET_URI (preferred) or "
+        "No connection string. Set MONGODB_TARGET_URI (preferred), "
+        "MDB_MCP_CONNECTION_STRING, or "
         "MONGODB_VERIFY_USER / MONGODB_VERIFY_PW in the environment."
     )
 
