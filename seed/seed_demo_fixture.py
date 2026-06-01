@@ -263,8 +263,8 @@ def write_golden(results: dict, count: int) -> None:
             "limit": Q_LIMIT,
         },
         "indexes": {
-            "B_wrong": {"keys": _keys_to_obj(INDEX_B_KEYS), "name": INDEX_B_NAME},
-            "C_right": {"keys": _keys_to_obj(INDEX_C_KEYS), "name": INDEX_C_NAME},
+            "B_wrong": {"keys": _keys_to_pairs(INDEX_B_KEYS), "name": INDEX_B_NAME},
+            "C_right": {"keys": _keys_to_pairs(INDEX_C_KEYS), "name": INDEX_C_NAME},
         },
         "results": {k: v for k, v in results.items() if not k.startswith("_")},
     }
@@ -276,8 +276,10 @@ def write_golden(results: dict, count: int) -> None:
     print(f"wrote golden -> {GOLDEN_PATH}  (fixtureHash={payload['fixtureHash'][:12]}…)")
 
 
-def _keys_to_obj(keys) -> dict:
-    return {k: v for k, v in keys}
+def _keys_to_pairs(keys) -> list:
+    # ordered [field, direction] pairs — a dict would lose key order under sort_keys,
+    # and field order IS the ESR distinction between index B and C.
+    return [[field, direction] for field, direction in keys]
 
 
 # ---- cli ------------------------------------------------------------------
