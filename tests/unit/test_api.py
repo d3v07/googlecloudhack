@@ -174,6 +174,7 @@ def test_local_file_pack_store_get_missing(tmp_path: Path) -> None:
 
 
 def test_create_app_with_existing_packs_dir_uses_local_file_store(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
     for pack in _PACKS[:1]:
         write_pack(pack, tmp_path)
     monkeypatch.setenv("PACKS_DIR", str(tmp_path))
@@ -192,6 +193,7 @@ def test_get_store_raises_when_not_overridden() -> None:
 
 
 def test_create_app_with_missing_packs_dir_uses_empty_store(monkeypatch) -> None:
+    monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
     monkeypatch.setenv("PACKS_DIR", "/tmp/nonexistent_gcrah_packs_dir_xyz")
     app = create_app()
     with TestClient(app) as c:
@@ -275,3 +277,40 @@ def test_empty_pack_store_save_pack_raises() -> None:
     pack = _minimal_pack("run-empty")
     with pytest.raises(NotImplementedError):
         store.save_pack(pack)
+
+
+# --- secrets module tests ---
+
+def test_get_mongo_connection_string_returns_env_conn(monkeypatch) -> None:
+    monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
+    monkeypatch.setenv("MDB_MCP_CONNECTION_STRING", "mongodb://localhost:27017")
+    from api.secrets import get_mongo_connection_string
+    assert get_mongo_connection_string() == "mongodb://localhost:27017"
+
+
+def test_get_mongo_connection_string_raises_when_neither_set(monkeypatch) -> None:
+    monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
+    monkeypatch.delenv("MDB_MCP_CONNECTION_STRING", raising=False)
+    from api.secrets import get_mongo_connection_string
+    with pytest.raises(RuntimeError, match="MONGO_SECRET_NAME"):
+        get_mongo_connection_string()
+
+
+def test_create_app_uses_local_file_path_when_no_mongo_secret(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
+    for pack in _PACKS[:1]:
+        write_pack(pack, tmp_path)
+    monkeypatch.setenv("PACKS_DIR", str(tmp_path))
+    app = create_app()
+    with TestClient(app) as c:
+        resp = c.get("/packs")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 1
+
+
+def test_create_app_uses_empty_store_when_no_mongo_secret_and_no_dir(monkeypatch) -> None:
+    monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
+    monkeypatch.setenv("PACKS_DIR", "/tmp/nonexistent_gcrah_secrets_test_xyz")
+    app = create_app()
+    with TestClient(app) as c:
+        assert c.get("/packs").json() == []

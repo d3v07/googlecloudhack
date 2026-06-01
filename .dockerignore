@@ -1,0 +1,41 @@
+# Version control
+.git/
+.gitignore
+
+# Secrets — must never enter the image
+.env
+.env.*
+.secrets/
+*-sa.json
+*-key.json
+*.pem
+
+# Python caches and tooling
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Frontend (not needed by the API)
+dashboard/
+
+# Tests, spikes, docs
+tests/
+spikes/
+docs/
+seed/
+infra/
+tools/
+
+# Local state
+runs/
+.claude/
+
+# OS noise
+.DS_Store
