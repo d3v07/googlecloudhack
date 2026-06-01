@@ -56,10 +56,19 @@ class EvidenceMetrics(BaseModel):
     total_keys_examined: int = Field(ge=0)
     stages: tuple[str, ...] = ()
 
-    @computed_field
+    @computed_field(return_type=bool)
     @property
     def has_blocking_sort(self) -> bool:
         return "SORT" in self.stages
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, schema, handler):
+        # pydantic v2 omits computed_fields from model_json_schema; inject manually
+        schema = handler(schema)
+        schema.setdefault("properties", {})["has_blocking_sort"] = {
+            "readOnly": True, "title": "Has Blocking Sort", "type": "boolean"
+        }
+        return schema
 
 
 class Evidence(BaseModel):
