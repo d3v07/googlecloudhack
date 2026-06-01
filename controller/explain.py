@@ -21,7 +21,7 @@ def get_connection_string() -> str | None:
     return None
 
 
-def _walk_stages(plan: Mapping[str, Any]) -> list[str]:
+def walk_stages(plan: Mapping[str, Any]) -> list[str]:
     stages: list[str] = []
     node: Any = plan
     while isinstance(node, Mapping):
@@ -32,7 +32,7 @@ def _walk_stages(plan: Mapping[str, Any]) -> list[str]:
             node = node["inputStage"]
         elif "inputStages" in node:
             for child in node["inputStages"]:
-                stages.extend(_walk_stages(child))
+                stages.extend(walk_stages(child))
             break
         else:
             break
@@ -58,7 +58,7 @@ def capture_evidence(
         docs_returned=stats["nReturned"],
         millis=float(stats.get("executionTimeMillis", 0)),
         total_keys_examined=stats["totalKeysExamined"],
-        stages=tuple(_walk_stages(winning)),
+        stages=tuple(walk_stages(winning)),
     )
     return Evidence(
         query={"filter": dict(query_filter), "sort": list(query_sort), "limit": limit},
