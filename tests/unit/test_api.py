@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from api.server import LocalFilePackStore, MongoPackStore, create_app
+from api.server import LocalFilePackStore, MongoPackStore, _EmptyPackStore, create_app
 from controller.ledger import evidence_hash as compute_hash
 from controller.persistence import write_pack
 from controller.schemas import (
@@ -52,6 +52,9 @@ class FakePackStore:
 
     def get_pack(self, run_id: str) -> EvidencePack | None:
         return self._packs.get(run_id)
+
+    def save_pack(self, pack: EvidencePack) -> None:
+        self._packs[pack.run_id] = pack
 
 
 _PACKS = [
@@ -122,6 +125,9 @@ class _FakeCollection:
     def find_one(self, query: dict, projection: dict | None = None) -> dict | None:
         return self._docs.get(query["run_id"])
 
+    def replace_one(self, query: dict, replacement: dict, upsert: bool = False) -> None:
+        self._docs[query["run_id"]] = replacement
+
 
 def test_mongo_pack_store_list() -> None:
     col = _FakeCollection(_PACKS)
@@ -191,3 +197,81 @@ def test_create_app_with_missing_packs_dir_uses_empty_store(monkeypatch) -> None
     with TestClient(app) as c:
         assert c.get("/packs").json() == []
         assert c.get("/packs/any").status_code == 404
+
+
+# --- approve/reject route tests ---
+
+def _approval_client_and_store(pack: EvidencePack) -> tuple[TestClient, FakePackStore]:
+    store = FakePackStore([pack])
+    return TestClient(create_app(store)), store
+
+
+def test_approve_transitions_to_approved() -> None:
+    pack = _minimal_pack("run-approve")
+    client, store = _approval_client_and_store(pack)
+    resp = client.post("/packs/run-approve/approve", json={"evidence_hash": pack.evidence_hash})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == PackStatus.APPROVED.value
+    assert data["decision"]["action"] == "approve"
+    assert data["decision"]["evidence_hash"] == pack.evidence_hash
+    # persisted in store
+    assert store.get_pack("run-approve").status == PackStatus.APPROVED
+
+
+def test_reject_transitions_to_rejected() -> None:
+    pack = _minimal_pack("run-reject")
+    client, store = _approval_client_and_store(pack)
+    resp = client.post("/packs/run-reject/reject", json={"evidence_hash": pack.evidence_hash})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == PackStatus.REJECTED.value
+    assert data["decision"]["action"] == "reject"
+    assert store.get_pack("run-reject").status == PackStatus.REJECTED
+
+
+def test_approve_unknown_run_id_returns_404() -> None:
+    store = FakePackStore([])
+    client = TestClient(create_app(store))
+    resp = client.post("/packs/no-such-run/approve", json={"evidence_hash": "a" * 64})
+    assert resp.status_code == 404
+
+
+def test_approve_evidence_hash_mismatch_returns_409() -> None:
+    pack = _minimal_pack("run-mismatch")
+    client, _ = _approval_client_and_store(pack)
+    resp = client.post("/packs/run-mismatch/approve", json={"evidence_hash": "b" * 64})
+    assert resp.status_code == 409
+
+
+def test_approve_already_approved_pack_returns_409() -> None:
+    pack = _minimal_pack("run-already", status=PackStatus.APPROVED)
+    client, _ = _approval_client_and_store(pack)
+    resp = client.post("/packs/run-already/approve", json={"evidence_hash": pack.evidence_hash})
+    assert resp.status_code == 409
+
+
+# --- save_pack store-level tests ---
+
+def test_mongo_pack_store_save_pack() -> None:
+    pack = _minimal_pack("run-save-mongo")
+    col = _FakeCollection([])
+    store = MongoPackStore(col)
+    store.save_pack(pack)
+    assert col._docs["run-save-mongo"]["run_id"] == "run-save-mongo"
+
+
+def test_local_file_pack_store_save_pack(tmp_path: Path) -> None:
+    pack = _minimal_pack("run-save-file")
+    store = LocalFilePackStore(tmp_path)
+    store.save_pack(pack)
+    retrieved = store.get_pack("run-save-file")
+    assert retrieved is not None
+    assert retrieved.run_id == "run-save-file"
+
+
+def test_empty_pack_store_save_pack_raises() -> None:
+    store = _EmptyPackStore()
+    pack = _minimal_pack("run-empty")
+    with pytest.raises(NotImplementedError):
+        store.save_pack(pack)
