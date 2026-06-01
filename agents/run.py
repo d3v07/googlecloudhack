@@ -85,8 +85,12 @@ def fetch_explain(connection_string: str, timeout: float = 90.0) -> dict:  # pra
             "tools/call",
             {"name": "explain", "arguments": {
                 "database": DB, "collection": COLL,
+                # hint the "obvious" index B so the explain shows the blocking-sort
+                # trap the agent diagnoses (the seeded collection also has the good
+                # index C, which the optimizer would otherwise pick unprompted)
                 "method": [{"name": "find", "arguments": {
-                    "filter": QUERY_FILTER, "sort": {"saleDate": -1}, "limit": LIMIT}}],
+                    "filter": QUERY_FILTER, "sort": {"saleDate": -1}, "limit": LIMIT,
+                    "hint": "esr_wrong_B"}}],
             }},
         )
         resp = wait_for(call_id, deadline)
