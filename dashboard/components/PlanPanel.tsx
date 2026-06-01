@@ -47,7 +47,7 @@ function EvidenceColumn({
     <div className={styles.column} data-variant={variant}>
       <header className={styles.colHead}>
         <span className={styles.colTitle}>{title}</span>
-        {m.has_blocking_sort ? (
+        {m.has_blocking_sort === true ? (
           <span className={styles.badBadge}>
             <Warning weight="fill" size={14} /> blocking sort
           </span>
@@ -71,7 +71,7 @@ function EvidenceColumn({
         <Metric
           label="keys examined"
           value={m.total_keys_examined.toLocaleString()}
-          tone={m.has_blocking_sort ? "bad" : "good"}
+          tone={m.has_blocking_sort === true ? "bad" : "good"}
         />
         <Metric label="docs examined" value={m.docs_examined.toLocaleString()} />
         <Metric label="returned" value={m.docs_returned.toLocaleString()} />

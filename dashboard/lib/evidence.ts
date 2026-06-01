@@ -11,7 +11,7 @@ export type IndexKey = [field: string, direction: number];
 export interface ExplainMetrics {
   docs_examined: number;
   docs_returned: number;
-  has_blocking_sort: boolean;
+  has_blocking_sort?: boolean;
   millis: number;
   stages: string[];
   total_keys_examined: number;
@@ -32,7 +32,7 @@ export interface Evidence {
 export interface Finding {
   evidence_refs: string[];
   problem: string;
-  severity: "low" | "medium" | "high";
+  severity: "low" | "medium" | "high" | "critical";
 }
 
 export interface Recommendation {
