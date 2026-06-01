@@ -53,9 +53,10 @@ class PymongoBackend:
             try:
                 self._coll.create_index(keys, name=name)
             except OperationFailure as exc:
-                # code 86 = IndexKeySpecsConflict — identical key pattern under different name;
-                # an equivalent index already exists so the verify step can proceed
-                if exc.code != 86:
+                # an equivalent index already exists under a different name, so the verify
+                # step can proceed by hinting the key pattern: 85 = IndexOptionsConflict,
+                # 86 = IndexKeySpecsConflict
+                if exc.code not in (85, 86):
                     raise
 
         await asyncio.to_thread(_create)

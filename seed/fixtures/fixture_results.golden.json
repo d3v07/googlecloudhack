@@ -1,22 +1,40 @@
 {
   "docCount": 300000,
-  "fixtureHash": "3245eb4856f0501808623e9059a18bbef94a47c04f3079b65b3d97dc117551cf",
+  "fixtureHash": "66fc9461e7fec9228ce3f4437fba3816e88bccf28c93c000c295e61d82f08db8",
   "fixtureVersion": 1,
   "indexes": {
     "B_wrong": {
-      "keys": {
-        "customer.age": 1,
-        "saleDate": -1,
-        "storeLocation": 1
-      },
+      "keys": [
+        [
+          "storeLocation",
+          1
+        ],
+        [
+          "customer.age",
+          1
+        ],
+        [
+          "saleDate",
+          -1
+        ]
+      ],
       "name": "esr_wrong_B"
     },
     "C_right": {
-      "keys": {
-        "customer.age": 1,
-        "saleDate": -1,
-        "storeLocation": 1
-      },
+      "keys": [
+        [
+          "storeLocation",
+          1
+        ],
+        [
+          "saleDate",
+          -1
+        ],
+        [
+          "customer.age",
+          1
+        ]
+      ],
       "name": "esr_right_C"
     }
   },

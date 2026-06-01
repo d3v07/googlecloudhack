@@ -29,3 +29,6 @@ node_modules/
 HANDOFF.md
 docs/
 mongo-build-plan.md
+
+# local agent worktrees / tooling state
+.claude/
