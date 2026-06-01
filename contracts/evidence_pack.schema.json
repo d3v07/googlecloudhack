@@ -1,0 +1,310 @@
+{
+  "$defs": {
+    "Decision": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/DecisionAction"
+        },
+        "evidence_hash": {
+          "maxLength": 64,
+          "minLength": 64,
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Evidence Hash",
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase"
+        }
+      },
+      "required": [
+        "action",
+        "evidence_hash",
+        "phase"
+      ],
+      "title": "Decision",
+      "type": "object"
+    },
+    "DecisionAction": {
+      "enum": [
+        "approve",
+        "reject",
+        "defer"
+      ],
+      "title": "DecisionAction",
+      "type": "string"
+    },
+    "Evidence": {
+      "properties": {
+        "explain_plan": {
+          "additionalProperties": true,
+          "title": "Explain Plan",
+          "type": "object"
+        },
+        "metrics": {
+          "$ref": "#/$defs/EvidenceMetrics"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Query"
+        }
+      },
+      "required": [
+        "query",
+        "explain_plan",
+        "metrics"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "EvidenceMetrics": {
+      "properties": {
+        "docs_examined": {
+          "minimum": 0,
+          "title": "Docs Examined",
+          "type": "integer"
+        },
+        "docs_returned": {
+          "minimum": 0,
+          "title": "Docs Returned",
+          "type": "integer"
+        },
+        "millis": {
+          "minimum": 0,
+          "title": "Millis",
+          "type": "number"
+        },
+        "stages": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Stages",
+          "type": "array"
+        },
+        "total_keys_examined": {
+          "minimum": 0,
+          "title": "Total Keys Examined",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "docs_examined",
+        "docs_returned",
+        "millis",
+        "total_keys_examined"
+      ],
+      "title": "EvidenceMetrics",
+      "type": "object"
+    },
+    "Finding": {
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "problem": {
+          "minLength": 1,
+          "title": "Problem",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity"
+        }
+      },
+      "required": [
+        "problem",
+        "severity",
+        "evidence_refs"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "PackStatus": {
+      "enum": [
+        "diagnosed",
+        "approved",
+        "verified",
+        "rejected"
+      ],
+      "title": "PackStatus",
+      "type": "string"
+    },
+    "Phase": {
+      "enum": [
+        "diagnose",
+        "approve",
+        "verify"
+      ],
+      "title": "Phase",
+      "type": "string"
+    },
+    "PhaseTransition": {
+      "properties": {
+        "from_phase": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Phase"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "to_phase": {
+          "$ref": "#/$defs/Phase"
+        }
+      },
+      "required": [
+        "to_phase"
+      ],
+      "title": "PhaseTransition",
+      "type": "object"
+    },
+    "Recommendation": {
+      "properties": {
+        "index_spec": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 1,
+          "title": "Index Spec",
+          "type": "array"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index_spec",
+        "rationale"
+      ],
+      "title": "Recommendation",
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "title": "Severity",
+      "type": "string"
+    }
+  },
+  "description": "Versioned, dashboard-facing run record. THE contract #10 consumes \u2014 frozen at v1.\nRead it via the published JSON Schema + the read endpoint; never import this module.",
+  "properties": {
+    "after": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Evidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "before": {
+      "$ref": "#/$defs/Evidence"
+    },
+    "created_at": {
+      "minLength": 1,
+      "title": "Created At",
+      "type": "string"
+    },
+    "decision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Decision"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "evidence_hash": {
+      "maxLength": 64,
+      "minLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evidence Hash",
+      "type": "string"
+    },
+    "finding": {
+      "$ref": "#/$defs/Finding"
+    },
+    "namespace": {
+      "minLength": 1,
+      "title": "Namespace",
+      "type": "string"
+    },
+    "phase_log": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PhaseTransition"
+      },
+      "title": "Phase Log",
+      "type": "array"
+    },
+    "recommendation": {
+      "$ref": "#/$defs/Recommendation"
+    },
+    "run_id": {
+      "minLength": 1,
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/PackStatus"
+    },
+    "version": {
+      "const": "v1",
+      "default": "v1",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "namespace",
+    "status",
+    "before",
+    "finding",
+    "recommendation",
+    "evidence_hash",
+    "created_at"
+  ],
+  "title": "EvidencePack",
+  "type": "object"
+}

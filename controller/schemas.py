@@ -1,9 +1,17 @@
 from enum import StrEnum
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from controller.phases import Phase
 
@@ -48,6 +56,7 @@ class EvidenceMetrics(BaseModel):
     total_keys_examined: int = Field(ge=0)
     stages: tuple[str, ...] = ()
 
+    @computed_field
     @property
     def has_blocking_sort(self) -> bool:
         return "SORT" in self.stages
@@ -100,3 +109,44 @@ class Diagnosis(BaseModel):
 
     finding: Finding
     recommendation: Recommendation
+
+
+class PackStatus(StrEnum):
+    DIAGNOSED = "diagnosed"
+    APPROVED = "approved"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
+class PhaseTransition(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    from_phase: Phase | None = None
+    to_phase: Phase
+    note: str = ""
+
+
+class EvidencePack(BaseModel):
+    """Versioned, dashboard-facing run record. THE contract #10 consumes — frozen at v1.
+    Read it via the published JSON Schema + the read endpoint; never import this module."""
+
+    model_config = ConfigDict(frozen=True)
+
+    version: Literal["v1"] = "v1"
+    run_id: str = Field(min_length=1)
+    namespace: str = Field(min_length=1)
+    status: PackStatus
+    before: Evidence
+    after: Evidence | None = None
+    finding: Finding
+    recommendation: Recommendation
+    decision: Decision | None = None
+    phase_log: tuple[PhaseTransition, ...] = ()
+    evidence_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
+    created_at: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _decision_hash_binds_this_pack(self) -> "EvidencePack":
+        if self.decision is not None and self.decision.evidence_hash != self.evidence_hash:
+            raise ValueError("decision.evidence_hash must equal the pack's evidence_hash")
+        return self

@@ -1,0 +1,75 @@
+{
+  "after": null,
+  "before": {
+    "explain_plan": {
+      "inputStage": {
+        "inputStage": {
+          "indexName": "esr_wrong_B",
+          "stage": "IXSCAN"
+        },
+        "stage": "SORT"
+      },
+      "stage": "FETCH"
+    },
+    "metrics": {
+      "docs_examined": 20,
+      "docs_returned": 20,
+      "has_blocking_sort": true,
+      "millis": 41.0,
+      "stages": [
+        "FETCH",
+        "SORT",
+        "IXSCAN"
+      ],
+      "total_keys_examined": 17209
+    },
+    "query": {
+      "filter": {
+        "customer.age": {
+          "$gte": 30,
+          "$lte": 50
+        },
+        "storeLocation": "Denver"
+      },
+      "limit": 20,
+      "sort": [
+        [
+          "saleDate",
+          -1
+        ]
+      ]
+    }
+  },
+  "created_at": "2026-06-01T00:00:00Z",
+  "decision": null,
+  "evidence_hash": "a20fca5ded1f8f2760a05401020813569356e8642185ba115a4ef5fc0cec640a",
+  "finding": {
+    "evidence_refs": [
+      "esr_wrong_B"
+    ],
+    "problem": "Query performs a blocking in-memory SORT: the serving index orders a Range field ahead of the Sort field, so the index cannot supply the requested order and every matched document is sorted in memory.",
+    "severity": "high"
+  },
+  "namespace": "sample_supplies.sales_agent_demo",
+  "phase_log": [],
+  "recommendation": {
+    "index_spec": [
+      [
+        "storeLocation",
+        1
+      ],
+      [
+        "saleDate",
+        -1
+      ],
+      [
+        "customer.age",
+        1
+      ]
+    ],
+    "rationale": "Reorder the index by the ESR rule (Equality['storeLocation'] -> Sort['saleDate'] -> Range['customer.age']). With Sort placed before Range, the index yields documents already in sort order, removing the blocking SORT stage and the over-scan it causes."
+  },
+  "run_id": "example-esr-001",
+  "status": "diagnosed",
+  "version": "v1"
+}
