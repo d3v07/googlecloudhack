@@ -1,24 +1,61 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldCheck, Fingerprint } from "@phosphor-icons/react/dist/ssr";
+import {
+  ShieldCheck,
+  XCircle,
+  Fingerprint,
+  CircleNotch,
+  Warning,
+} from "@phosphor-icons/react/dist/ssr";
 import type { PackStatus } from "@/lib/evidence";
+import { submitDecision, type DecisionKind } from "@/lib/approval";
 import styles from "./ApproveBar.module.css";
 
 /**
- * Approve action. In this scaffold the button is intentionally inert (Day 3+
- * wires it to POST an approval keyed to evidence_hash). The hash is shown
- * because it is exactly what a human approval signs off on.
+ * Approve / reject the recommended index, keyed to evidence_hash.
+ *
+ * The hash is what the operator signs off on (it binds before + recommendation),
+ * so it is sent with the decision. The actual request shape lives in
+ * lib/approval.ts (see APPROVAL_CONTRACT.md). Until the approval API (#29) is
+ * deployed, a decision returns `no_api` and the UI shows a clear "not persisted"
+ * state rather than faking success.
  */
 export function ApproveBar({
+  runId,
   evidenceHash,
   status,
 }: {
+  runId: string;
   evidenceHash: string;
   status: PackStatus;
 }) {
-  const [clicked, setClicked] = useState(false);
-  const pending = status === "diagnosed";
+  // Local status lets the bar reflect the outcome without a full reload.
+  const [localStatus, setLocalStatus] = useState<PackStatus>(status);
+  const [busy, setBusy] = useState<DecisionKind | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const pending = localStatus === "diagnosed";
+  const settled = localStatus === "approved" || localStatus === "rejected";
+
+  async function decide(decision: DecisionKind) {
+    setBusy(decision);
+    setError(null);
+    const res = await submitDecision({ runId, decision, evidenceHash });
+    setBusy(null);
+
+    if (res.ok) {
+      setLocalStatus(res.status ?? (decision === "approve" ? "approved" : "rejected"));
+      return;
+    }
+    if (res.error === "no_api") {
+      // Demo/fallback: reflect the choice locally but be honest it wasn't saved.
+      setLocalStatus(decision === "approve" ? "approved" : "rejected");
+      setError("Recorded locally only — approval API not configured.");
+      return;
+    }
+    setError(res.message ?? "Could not record the decision.");
+  }
 
   return (
     <section className={styles.bar}>
@@ -28,15 +65,52 @@ export function ApproveBar({
         <code className={styles.hash}>{evidenceHash}</code>
       </div>
 
-      <button
-        className={styles.approve}
-        disabled={!pending || clicked}
-        onClick={() => setClicked(true)}
-        title={pending ? "Approve the recommended index" : "Nothing pending approval"}
-      >
-        <ShieldCheck weight="fill" size={18} />
-        {clicked ? "Approval recorded (scaffold)" : pending ? "Approve fix" : "No action pending"}
-      </button>
+      <div className={styles.actions}>
+        {error && (
+          <span className={styles.error}>
+            <Warning weight="fill" size={14} /> {error}
+          </span>
+        )}
+
+        {settled ? (
+          <span className={styles.settled} data-decision={localStatus}>
+            {localStatus === "approved" ? (
+              <ShieldCheck weight="fill" size={18} />
+            ) : (
+              <XCircle weight="fill" size={18} />
+            )}
+            {localStatus === "approved" ? "Fix approved" : "Fix rejected"}
+          </span>
+        ) : (
+          <>
+            <button
+              className={styles.reject}
+              disabled={!pending || busy !== null}
+              onClick={() => decide("reject")}
+            >
+              {busy === "reject" ? (
+                <CircleNotch size={16} className={styles.spin} />
+              ) : (
+                <XCircle size={16} />
+              )}
+              Reject
+            </button>
+            <button
+              className={styles.approve}
+              disabled={!pending || busy !== null}
+              onClick={() => decide("approve")}
+              title={pending ? "Approve the recommended index" : "Nothing pending approval"}
+            >
+              {busy === "approve" ? (
+                <CircleNotch size={18} className={styles.spin} />
+              ) : (
+                <ShieldCheck weight="fill" size={18} />
+              )}
+              {pending ? "Approve fix" : "No action pending"}
+            </button>
+          </>
+        )}
+      </div>
     </section>
   );
 }

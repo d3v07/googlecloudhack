@@ -47,7 +47,7 @@ export default async function AgentRunPage({
         <EvidencePanel finding={pack.finding} recommendation={pack.recommendation} />
       </div>
 
-      <ApproveBar evidenceHash={pack.evidence_hash} status={pack.status} />
+      <ApproveBar runId={pack.run_id} evidenceHash={pack.evidence_hash} status={pack.status} />
 
       <footer className={styles.footer}>
         EvidencePack <code>{pack.version}</code>
