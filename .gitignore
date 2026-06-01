@@ -19,6 +19,9 @@ __pycache__/
 htmlcov/
 coverage.xml
 
+# generated evidence packs (served locally via PACKS_DIR)
+runs/
+
 # node
 node_modules/
 
