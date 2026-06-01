@@ -274,6 +274,18 @@
       "title": "Namespace",
       "type": "string"
     },
+    "narrative": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Narrative"
+    },
     "phase_log": {
       "default": [],
       "items": {
