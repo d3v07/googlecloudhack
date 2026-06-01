@@ -45,6 +45,12 @@ class EvidenceMetrics(BaseModel):
     docs_examined: int = Field(ge=0)
     docs_returned: int = Field(ge=0)
     millis: float = Field(ge=0)
+    total_keys_examined: int = Field(ge=0)
+    stages: tuple[str, ...] = ()
+
+    @property
+    def has_blocking_sort(self) -> bool:
+        return "SORT" in self.stages
 
 
 class Evidence(BaseModel):
@@ -75,17 +81,10 @@ class Finding(BaseModel):
 class Recommendation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    index_spec: Mapping[str, Any] | str
+    # ordered (field, direction) pairs — field ORDER is the recommendation (ESR), so a
+    # dict would lose it under sorted-key hashing/serialization. Pairs stay ordered.
+    index_spec: tuple[tuple[str, int], ...] = Field(min_length=1)
     rationale: str = Field(min_length=1)
-
-    @field_validator("index_spec", mode="after")
-    @classmethod
-    def freeze_payload(cls, value: Any) -> Any:
-        return _freeze(value)
-
-    @field_serializer("index_spec")
-    def serialize_payload(self, value: Any) -> Any:
-        return _thaw(value)
 
 
 class Decision(BaseModel):
@@ -94,3 +93,10 @@ class Decision(BaseModel):
     action: DecisionAction
     evidence_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
     phase: Phase
+
+
+class Diagnosis(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    finding: Finding
+    recommendation: Recommendation
