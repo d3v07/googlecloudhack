@@ -1,0 +1,105 @@
+.main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.brandIcon {
+  color: var(--amber);
+  transform: translateY(3px);
+}
+
+.brandName {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.brandTag {
+  font-size: 12px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.runMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.runMeta code {
+  color: var(--text-dim);
+}
+
+.dot {
+  color: var(--text-faint);
+}
+
+.status {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 99px;
+  color: var(--amber);
+  background: var(--amber-dim);
+}
+
+.status[data-status="verified"] {
+  color: var(--green);
+  background: var(--green-dim);
+}
+
+.status[data-status="rejected"] {
+  color: var(--red);
+  background: var(--red-dim);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.footer {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.footer code {
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
