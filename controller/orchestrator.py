@@ -4,6 +4,7 @@ Runs the full phase cycle: capture before-evidence, diagnose the ESR problem,
 auto-approve, apply a scratch index, capture after-evidence, then clean up.
 """
 
+import asyncio
 from datetime import datetime, timezone
 
 from controller.backends import Backend
@@ -93,5 +94,7 @@ async def run_remediation(
         phase_log=phase_log,
     )
     if narrator is not None:
-        pack = pack.model_copy(update={"narrative": narrator.narrate(pack)})
+        # narrate may do network I/O (Gemini) — keep it off the event loop
+        narrative = await asyncio.to_thread(narrator.narrate, pack)
+        pack = pack.model_copy(update={"narrative": narrative})
     return pack

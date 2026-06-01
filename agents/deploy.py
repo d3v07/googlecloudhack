@@ -57,6 +57,9 @@ def deploy() -> str:  # pragma: no cover - live deploy
             "display_name": "GCRAH DBRE Agent",
             "description": "Evidence-driven MongoDB performance engineer — ESR index diagnosis.",
             "requirements": _REQUIREMENTS,
+            # the pickled agent's tools import these local packages — ship them into
+            # the runtime (pip requirements alone don't include first-party code)
+            "extra_packages": ["controller", "agents"],
             "staging_bucket": staging_bucket,
             "identity_type": vertexai_types.IdentityType.AGENT_IDENTITY,
             "min_instances": 0,
