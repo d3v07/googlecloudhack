@@ -5,6 +5,7 @@ pure adapter the scripted driver uses: it pulls the ESR signal out of a raw MCP/
 explain document and runs the deterministic diagnosis — no I/O, fully testable offline.
 """
 
+import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -39,6 +40,25 @@ def _index_name(plan: Mapping[str, Any]) -> str | None:
             return node.get("indexName")
         node = node.get("inputStage")
     return None
+
+
+def extract_explain_json(text: str) -> dict:
+    """Pull the explain document out of the MongoDB MCP `explain` tool's response.
+
+    That tool returns prose + the queryPlanner JSON wrapped in injection-guard tags,
+    not raw JSON — so scan for the first balanced object that carries `queryPlanner`.
+    """
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and "queryPlanner" in obj:
+            return obj
+    raise ValueError("no queryPlanner JSON found in MCP explain response")
 
 
 def diagnosis_from_explain(
