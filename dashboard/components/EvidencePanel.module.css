@@ -1,0 +1,101 @@
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.findingIcon {
+  color: var(--red);
+}
+
+.recIcon {
+  color: var(--amber);
+}
+
+.severity {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 99px;
+}
+
+.severity[data-sev="high"] {
+  color: var(--red);
+  background: var(--red-dim);
+}
+
+.severity[data-sev="medium"] {
+  color: var(--amber);
+  background: var(--amber-dim);
+}
+
+.severity[data-sev="low"] {
+  color: var(--green);
+  background: var(--green-dim);
+}
+
+.body {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.refs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ref {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--cyan);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.indexSpec {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--green);
+  background: var(--bg);
+  border: 1px solid var(--green-dim);
+  border-radius: 4px;
+  padding: 12px 14px;
+  display: block;
+  overflow-x: auto;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+}

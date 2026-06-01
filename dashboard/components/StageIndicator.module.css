@@ -1,0 +1,67 @@
+.track {
+  display: flex;
+  align-items: center;
+  list-style: none;
+  gap: 0;
+  padding: 18px 22px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  flex: 1;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  transition: color 0.2s ease;
+}
+
+.label {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.connector {
+  flex: 1;
+  height: 1px;
+  background: var(--border-bright);
+  margin: 0 14px;
+}
+
+.step[data-state="done"] .icon,
+.step[data-state="done"] .label {
+  color: var(--green);
+}
+
+.step[data-state="active"] .icon,
+.step[data-state="active"] .label {
+  color: var(--amber);
+}
+
+.step[data-state="rejected"] .icon,
+.step[data-state="rejected"] .label {
+  color: var(--red);
+}
+
+.spin {
+  animation: spin 1.4s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
