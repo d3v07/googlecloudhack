@@ -54,8 +54,16 @@ def create_app(store: PackStore | None = None) -> FastAPI:
     app = FastAPI(title="GCRAH Evidence Pack API")
 
     if store is None:
-        packs_dir = Path(os.getenv("PACKS_DIR", "runs"))
-        store = LocalFilePackStore(packs_dir) if packs_dir.exists() else _EmptyPackStore()
+        if os.getenv("MONGO_SECRET_NAME"):  # pragma: no cover - live
+            from pymongo import MongoClient  # noqa: PLC0415
+
+            from api.secrets import get_mongo_connection_string  # noqa: PLC0415
+
+            collection = MongoClient(get_mongo_connection_string())["dbre_state"]["evidence_packs"]
+            store = MongoPackStore(collection)
+        else:
+            packs_dir = Path(os.getenv("PACKS_DIR", "runs"))
+            store = LocalFilePackStore(packs_dir) if packs_dir.exists() else _EmptyPackStore()
 
     app.dependency_overrides[get_store] = lambda: store
     app.include_router(router)

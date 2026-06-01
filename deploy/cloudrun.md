@@ -1,0 +1,154 @@
+# Cloud Run Deploy Runbook — gcrah-read-api
+
+Service: **gcrah-read-api**
+Project: **performer-497915**
+Region: **us-central1**
+Entrypoint: `api.server:app` (FastAPI, `create_app()` factory)
+
+---
+
+## Prerequisites
+
+### 1. Secret Manager — Mongo connection string
+
+The API reads the MongoDB Atlas URI from Secret Manager at startup. Create it once:
+
+```bash
+# Create the secret
+gcloud secrets create gcrah-mongo-uri \
+  --replication-policy=automatic \
+  --project=performer-497915
+
+# Add the connection string as version 1
+echo -n "mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/dbre_state?retryWrites=true" \
+  | gcloud secrets versions add gcrah-mongo-uri \
+      --data-file=- \
+      --project=performer-497915
+```
+
+The secret name (`gcrah-mongo-uri`) is what you pass as `MONGO_SECRET_NAME`. The API
+resolves the actual value using the Secret Manager SDK at runtime — the plaintext URI
+never appears in Cloud Run env vars or logs.
+
+### 2. Service account
+
+Use the existing SA from the agent-runtime spike:
+
+```
+dbre-agent@performer-497915.iam.gserviceaccount.com
+```
+
+Grant it access to the secret:
+
+```bash
+gcloud secrets add-iam-policy-binding gcrah-mongo-uri \
+  --project=performer-497915 \
+  --role=roles/secretmanager.secretAccessor \
+  --member="serviceAccount:dbre-agent@performer-497915.iam.gserviceaccount.com"
+```
+
+---
+
+## Deploy
+
+Run from the **repo root**:
+
+```bash
+export GCP_PROJECT=performer-497915
+export MONGO_SECRET_NAME=gcrah-mongo-uri
+bash deploy/deploy_cloudrun.sh
+```
+
+The script uses `--source .` which triggers Cloud Build to build from the `Dockerfile`
+in the repo root and push the image to Artifact Registry automatically.
+
+### What the script does
+
+1. Grants `roles/secretmanager.secretAccessor` on the secret to the SA (idempotent).
+2. Calls `gcloud run deploy` with:
+   - `GOOGLE_CLOUD_PROJECT=performer-497915` — used by the Secret Manager client
+   - `MONGO_SECRET_NAME=gcrah-mongo-uri` — the secret name (not the value)
+   - SA: `dbre-agent@performer-497915.iam.gserviceaccount.com`
+   - 0–3 instances, 512 MiB, 1 vCPU
+3. Prints the live service URL.
+
+---
+
+## Smoke Tests
+
+After deploy, get the URL:
+
+```bash
+SERVICE_URL=$(gcloud run services describe gcrah-read-api \
+  --region us-central1 --project performer-497915 \
+  --format "value(status.url)")
+```
+
+**Liveness:**
+```bash
+curl -sf "${SERVICE_URL}/health"
+# Expected: {"status":"ok"}
+```
+
+**Pack list (empty is fine on first deploy):**
+```bash
+curl -sf "${SERVICE_URL}/packs"
+# Expected: [] or a JSON array of evidence packs
+```
+
+**Single pack (replace RUN_ID with a real run_id from /packs):**
+```bash
+curl -sf "${SERVICE_URL}/packs/RUN_ID"
+# Expected: JSON object with run_id, status, evidence, etc.
+# 404 if pack doesn't exist
+```
+
+**Approve a pack (pack must be in DIAGNOSED status):**
+```bash
+curl -sf -X POST "${SERVICE_URL}/packs/RUN_ID/approve" \
+  -H "Content-Type: application/json" \
+  -d '{"evidence_hash": "<hash-from-pack>"}'
+```
+
+---
+
+## Estimated Cost
+
+Cloud Run charges only for active request time on this config (min-instances=0).
+
+| Resource | Rate (approx) |
+|---|---|
+| vCPU-second | $0.000024/vCPU-s |
+| Memory-second | $0.0000025/GiB-s |
+| Requests | $0.40/million |
+| Idle (min=0) | $0 — scales to zero |
+
+For a hackathon with light traffic: well under $1/day.
+
+---
+
+## Teardown
+
+```bash
+gcloud run services delete gcrah-read-api \
+  --region us-central1 \
+  --project performer-497915 \
+  --quiet
+```
+
+To also delete the secret:
+```bash
+gcloud secrets delete gcrah-mongo-uri --project performer-497915 --quiet
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `uvicorn: not found` at start | PATH not set in image | `ENV PATH="/app/.venv/bin:$PATH"` is in Dockerfile — rebuild |
+| `ModuleNotFoundError: api` | Wrong import root | `--app-dir .` in CMD ensures `/app` is the import root |
+| 500 on `/packs` | Mongo conn failed | Check SA has Secret Manager accessor role; verify secret version exists |
+| 403 on Secret Manager | Missing IAM | Re-run the `gcloud secrets add-iam-policy-binding` command above |
+| Port mismatch | Cloud Run injects `PORT` | CMD uses `${PORT:-8080}` via `sh -c` — already handled |
