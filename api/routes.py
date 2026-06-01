@@ -1,6 +1,7 @@
-from typing import Annotated, Protocol
+from typing import Annotated, Literal, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from controller.phases import Phase, assert_phase_transition
@@ -73,3 +74,31 @@ def approve_pack(run_id: str, body: ApprovalRequest, store: StoreDep) -> dict:
 @router.post("/packs/{run_id}/reject")
 def reject_pack(run_id: str, body: ApprovalRequest, store: StoreDep) -> dict:
     return _apply_decision(run_id, DecisionAction.REJECT, body, store)
+
+
+class DecisionRequest(BaseModel):
+    decision: Literal["approve", "reject"]
+    evidence_hash: str
+    approver: str = "dashboard-operator"
+    note: str = ""
+
+
+@router.post("/packs/{run_id}/decision")
+def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep):
+    """Single approve/reject endpoint the dashboard (#26) calls. Returns the updated
+    pack on success; 404 not_found / 409 stale_evidence_hash | already_decided otherwise.
+    `approver`/`note` are accepted for the audit trail (not yet persisted on Decision)."""
+    pack = store.get_pack(run_id)
+    if pack is None:
+        return JSONResponse(status_code=404, content={"error": "not_found"})
+    if pack.status != PackStatus.DIAGNOSED:
+        return JSONResponse(
+            status_code=409, content={"error": "already_decided", "status": pack.status.value}
+        )
+    if body.evidence_hash != pack.evidence_hash:
+        return JSONResponse(
+            status_code=409,
+            content={"error": "stale_evidence_hash", "current_hash": pack.evidence_hash},
+        )
+    action = DecisionAction.APPROVE if body.decision == "approve" else DecisionAction.REJECT
+    return _apply_decision(run_id, action, ApprovalRequest(evidence_hash=body.evidence_hash), store)
