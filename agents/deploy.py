@@ -47,7 +47,6 @@ def _agent_env_vars() -> dict[str, str | dict[str, str]]:
 def deploy() -> str:  # pragma: no cover - live deploy
     import vertexai
     from vertexai import agent_engines
-    from vertexai import types as vertexai_types
 
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
@@ -59,24 +58,20 @@ def deploy() -> str:  # pragma: no cover - live deploy
     print(f"STAGING_BUCKET={staging_bucket}")
     print(f"MONGO_SECRET_NAME={env_vars['MONGODB_TARGET_URI']['secret']}")
 
-    client = vertexai.Client(project=project, location=location)
+    vertexai.init(project=project, location=location, staging_bucket=staging_bucket)
     app = agent_engines.AdkApp(agent=build_agent(), app_name="gcrah_dbre_agent")
 
-    remote_agent = client.agent_engines.create(
-        agent=app,
-        config={
-            "display_name": "GCRAH DBRE Agent",
-            "description": "Evidence-driven MongoDB performance engineer — ESR index diagnosis.",
-            "requirements": _REQUIREMENTS,
-            # the pickled agent's tools import these local packages — ship them into
-            # the runtime (pip requirements alone don't include first-party code)
-            "extra_packages": ["controller", "agents"],
-            "staging_bucket": staging_bucket,
-            "env_vars": env_vars,
-            "identity_type": vertexai_types.IdentityType.AGENT_IDENTITY,
-            "min_instances": 0,
-            "max_instances": 1,
-        },
+    remote_agent = agent_engines.create(
+        agent_engine=app,
+        display_name="GCRAH DBRE Agent",
+        description="Evidence-driven MongoDB performance engineer — ESR index diagnosis.",
+        requirements=_REQUIREMENTS,
+        # the pickled agent's tools import these local packages — ship them into
+        # the runtime (pip requirements alone don't include first-party code)
+        extra_packages=["controller", "agents"],
+        env_vars=env_vars,
+        min_instances=0,
+        max_instances=1,
     )
 
     resource_name = _resource_name(remote_agent)
