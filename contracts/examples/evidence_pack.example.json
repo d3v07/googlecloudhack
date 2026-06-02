@@ -1,5 +1,6 @@
 {
   "after": null,
+  "agent_trace": [],
   "before": {
     "explain_plan": {
       "inputStage": {

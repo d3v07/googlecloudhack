@@ -1,5 +1,86 @@
 {
   "$defs": {
+    "AgentTraceActor": {
+      "enum": [
+        "agent_engine",
+        "deterministic_controller",
+        "human"
+      ],
+      "title": "AgentTraceActor",
+      "type": "string"
+    },
+    "AgentTraceEvent": {
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/AgentTraceActor"
+        },
+        "ledger_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ledger Ref"
+        },
+        "stage": {
+          "$ref": "#/$defs/AgentTraceStage"
+        },
+        "status": {
+          "$ref": "#/$defs/AgentTraceStatus"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool"
+        }
+      },
+      "required": [
+        "stage",
+        "actor",
+        "status",
+        "summary"
+      ],
+      "title": "AgentTraceEvent",
+      "type": "object"
+    },
+    "AgentTraceStage": {
+      "enum": [
+        "detect",
+        "diagnose",
+        "candidate",
+        "rationale",
+        "approve",
+        "apply",
+        "verify"
+      ],
+      "title": "AgentTraceStage",
+      "type": "string"
+    },
+    "AgentTraceStatus": {
+      "enum": [
+        "ok",
+        "drift",
+        "failed"
+      ],
+      "title": "AgentTraceStatus",
+      "type": "string"
+    },
     "Decision": {
       "properties": {
         "action": {
@@ -239,6 +320,14 @@
         }
       ],
       "default": null
+    },
+    "agent_trace": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/AgentTraceEvent"
+      },
+      "title": "Agent Trace",
+      "type": "array"
     },
     "before": {
       "$ref": "#/$defs/Evidence"

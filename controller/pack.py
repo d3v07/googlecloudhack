@@ -12,6 +12,7 @@ from controller.schemas import (
     Evidence,
     EvidencePack,
     Finding,
+    AgentTraceEvent,
     PackStatus,
     PhaseTransition,
     Recommendation,
@@ -34,6 +35,7 @@ def build_pack(
     after: Evidence | None = None,
     decision: Decision | None = None,
     phase_log: Sequence[PhaseTransition] = (),
+    agent_trace: Sequence[AgentTraceEvent] = (),
     narrative: str | None = None,
 ) -> EvidencePack:
     return EvidencePack(
@@ -47,6 +49,7 @@ def build_pack(
         recommendation=recommendation,
         decision=decision,
         phase_log=tuple(phase_log),
+        agent_trace=tuple(agent_trace),
         evidence_hash=pack_evidence_hash(before, recommendation),
         narrative=narrative,
     )

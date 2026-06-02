@@ -98,6 +98,15 @@ def test_diagnosis_writes_slow_query_candidate_experiment_and_pack_records():
         ledger.records[SLOW_QUERIES][f"{RUN_ID}:diagnose:slow_query"]["evidence_hash"]
         == pack.evidence_hash
     )
+    assert ledger.records[SLOW_QUERIES][f"{RUN_ID}:diagnose:slow_query"]["source"] == (
+        "deterministic_esr"
+    )
+    assert ledger.records[CANDIDATES][f"{RUN_ID}:diagnose:candidate"]["source"] == (
+        "deterministic_esr"
+    )
+    assert ledger.records[EXPERIMENTS][f"{RUN_ID}:diagnose:before"]["source"] == (
+        "deterministic_esr"
+    )
 
 
 def test_diagnosis_ledger_writes_are_idempotent_for_retry():

@@ -5,15 +5,22 @@ import asyncio
 import pytest
 
 from controller.backends import FakeBackend
+from controller.ledger_store import CANDIDATES, EXPERIMENTS, FakeLedgerStore, SLOW_QUERIES
 from controller.orchestrator import (
+    AgentDiagnosisResult,
     DiagnosisAdvice,
     apply_and_verify,
     reject_pack,
+    run_agent_diagnosis,
     run_diagnosis,
 )
 from controller.pack import pack_evidence_hash
 from controller.phases import InvalidPhaseTransition, Phase, assert_phase_transition
 from controller.schemas import (
+    AgentTraceActor,
+    AgentTraceEvent,
+    AgentTraceStage,
+    AgentTraceStatus,
     DecisionAction,
     Evidence,
     EvidenceMetrics,
@@ -81,6 +88,34 @@ class _CorrectAdvisor:
             source="agent-engine-test",
             narrative="Agent proposes the same ESR winner.",
             proposed_index=(("storeLocation", 1), ("saleDate", -1), ("customer.age", 1)),
+        )
+
+
+class _AgentDiagnosis:
+    def __init__(
+        self,
+        *,
+        before: Evidence,
+        proposed_index=(("storeLocation", 1), ("saleDate", -1), ("customer.age", 1)),
+    ) -> None:
+        self.before = before
+        self.proposed_index = proposed_index
+
+    async def diagnose(self, **kwargs) -> AgentDiagnosisResult:
+        return AgentDiagnosisResult(
+            source="agent-engine-test",
+            before=self.before,
+            narrative="Agent Engine measured the blocking sort and recommended ESR index C.",
+            proposed_index=self.proposed_index,
+            trace=(
+                AgentTraceEvent(
+                    stage=AgentTraceStage.DETECT,
+                    actor=AgentTraceActor.AGENT_ENGINE,
+                    status=AgentTraceStatus.OK,
+                    tool="explain_slow_query",
+                    summary="Agent Engine captured slow-query evidence.",
+                ),
+            ),
         )
 
 
@@ -198,6 +233,82 @@ def test_agent_engine_note_records_matching_proposal_as_accepted():
     assert pack.phase_log[0].note == "agent_engine=agent-engine-test; proposed_index=accepted"
 
 
+def test_agent_led_diagnosis_builds_pack_from_agent_evidence():
+    before = _make_evidence(has_blocking_sort=True, keys_examined=17209)
+    pack = asyncio.run(
+        run_agent_diagnosis(
+            _AgentDiagnosis(before=before),
+            run_id=RUN_ID,
+            namespace=NAMESPACE,
+            query_filter=QUERY_FILTER,
+            query_sort=QUERY_SORT,
+            limit=LIMIT,
+            created_at=CREATED_AT,
+        )
+    )
+
+    assert pack.status is PackStatus.DIAGNOSED
+    assert pack.before == before
+    assert pack.recommendation.index_spec == (
+        ("storeLocation", 1),
+        ("saleDate", -1),
+        ("customer.age", 1),
+    )
+    assert pack.evidence_hash == pack_evidence_hash(pack.before, pack.recommendation)
+    assert pack.agent_trace[0].tool == "explain_slow_query"
+    assert pack.agent_trace[-1].actor is AgentTraceActor.DETERMINISTIC_CONTROLLER
+    assert pack.agent_trace[-1].status is AgentTraceStatus.OK
+
+
+def test_agent_led_diagnosis_records_drift_without_changing_winner():
+    wrong_b = (("storeLocation", 1), ("customer.age", 1), ("saleDate", -1))
+    pack = asyncio.run(
+        run_agent_diagnosis(
+            _AgentDiagnosis(before=_make_evidence(True, 17209), proposed_index=wrong_b),
+            run_id=RUN_ID,
+            namespace=NAMESPACE,
+            query_filter=QUERY_FILTER,
+            query_sort=QUERY_SORT,
+            limit=LIMIT,
+            created_at=CREATED_AT,
+        )
+    )
+
+    assert pack.recommendation.index_spec == (
+        ("storeLocation", 1),
+        ("saleDate", -1),
+        ("customer.age", 1),
+    )
+    assert "proposed_index=ignored" in pack.phase_log[0].note
+    assert pack.agent_trace[-1].status is AgentTraceStatus.DRIFT
+
+
+def test_agent_led_diagnosis_writes_agent_sourced_ledger_records():
+    ledger = FakeLedgerStore()
+    asyncio.run(
+        run_agent_diagnosis(
+            _AgentDiagnosis(before=_make_evidence(True, 17209)),
+            run_id=RUN_ID,
+            namespace=NAMESPACE,
+            query_filter=QUERY_FILTER,
+            query_sort=QUERY_SORT,
+            limit=LIMIT,
+            created_at=CREATED_AT,
+            ledger=ledger,
+        )
+    )
+
+    assert ledger.records[SLOW_QUERIES][f"{RUN_ID}:diagnose:slow_query"]["source"] == (
+        "agent_engine_tool"
+    )
+    assert ledger.records[CANDIDATES][f"{RUN_ID}:diagnose:candidate"]["source"] == (
+        "agent_engine_tool"
+    )
+    assert ledger.records[EXPERIMENTS][f"{RUN_ID}:diagnose:before"]["source"] == (
+        "agent_engine_tool"
+    )
+
+
 # --- apply_and_verify (post-approval mutation) ---
 
 
@@ -251,6 +362,28 @@ def test_apply_and_verify_phase_log_has_three_entries():
         Phase.APPROVE,
         Phase.VERIFY,
     ]
+
+
+def test_apply_and_verify_appends_human_apply_and_verify_trace():
+    backend = FakeBackend([_make_evidence(False)])
+    pack = asyncio.run(
+        run_agent_diagnosis(
+            _AgentDiagnosis(before=_make_evidence(True)),
+            run_id=RUN_ID,
+            namespace=NAMESPACE,
+            query_filter=QUERY_FILTER,
+            query_sort=QUERY_SORT,
+            limit=LIMIT,
+            created_at=CREATED_AT,
+        )
+    )
+    verified = _apply(backend, pack)
+
+    stages = [event.stage for event in verified.agent_trace]
+    assert AgentTraceStage.APPROVE in stages
+    assert AgentTraceStage.APPLY in stages
+    assert AgentTraceStage.VERIFY in stages
+    assert verified.agent_trace[-1].status is AgentTraceStatus.OK
 
 
 def test_apply_and_verify_rejects_a_non_diagnosed_pack():
