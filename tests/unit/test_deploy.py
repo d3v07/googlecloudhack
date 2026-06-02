@@ -74,8 +74,8 @@ def test_agent_env_vars_use_secret_manager_reference(monkeypatch):
 
     env_vars = _agent_env_vars("performer-497915", "us-central1")
 
-    assert env_vars["GOOGLE_CLOUD_PROJECT"] == "performer-497915"
-    assert env_vars["GOOGLE_CLOUD_LOCATION"] == "us-central1"
+    assert env_vars["GCRAH_AGENT_PROJECT"] == "performer-497915"
+    assert env_vars["GCRAH_AGENT_LOCATION"] == "us-central1"
     assert env_vars["MONGODB_TARGET_URI"] == {"secret": "mongo-uri", "version": "3"}
     assert env_vars["GEMINI_MODEL"] == "gemini-3-flash"
 

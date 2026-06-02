@@ -12,7 +12,11 @@ def build_adk_app(project: str | None = None, location: str | None = None):
     from vertexai import agent_engines
 
     vertexai.init(
-        project=project or os.environ.get("GOOGLE_CLOUD_PROJECT", "local-ci"),
-        location=location or os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        project=project
+        or os.environ.get("GCRAH_AGENT_PROJECT")
+        or os.environ.get("GOOGLE_CLOUD_PROJECT", "local-ci"),
+        location=location
+        or os.environ.get("GCRAH_AGENT_LOCATION")
+        or os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
     )
     return agent_engines.AdkApp(agent=root_agent, app_name=APP_NAME)
