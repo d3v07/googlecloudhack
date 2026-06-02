@@ -1,12 +1,10 @@
 /**
- * Approval submission layer (#26).
+ * Approval submission layer (#26, retrofitted in #37).
  *
- * Isolates the approval API call so the exact endpoint + request shape live in
- * ONE place — see APPROVAL_CONTRACT.md, the proposal sent to #29 (@d3v07). When
- * that shape is finalized, only this file changes; the UI does not.
- *
- * Client-side (the ApproveBar is a client component), so it reads the public
- * NEXT_PUBLIC_API_URL — the same base used by lib/api.ts for reads.
+ * The read API's /decision endpoint is token-gated (backend #58), and the token
+ * must never reach the browser. So this client posts to the SAME-ORIGIN proxy
+ * route (`/api/decision`, server-only) which holds RUN_API_TOKEN and forwards
+ * upstream. The request/response shape the operator's browser sees is unchanged.
  */
 
 import type { EvidencePack, PackStatus } from "./evidence";
@@ -24,14 +22,10 @@ export interface DecisionResult {
   message?: string;
 }
 
-function apiBase(): string | null {
-  const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
-  return raw ? raw.replace(/\/+$/, "") : null;
-}
-
 /**
  * Submit an approve/reject decision keyed to the evidence hash the operator saw.
- * Never throws — returns a DecisionResult the UI can render directly.
+ * Posts to the same-origin /api/decision proxy. Never throws — returns a
+ * DecisionResult the UI can render directly.
  */
 export async function submitDecision(args: {
   runId: string;
@@ -40,30 +34,29 @@ export async function submitDecision(args: {
   approver?: string;
   note?: string;
 }): Promise<DecisionResult> {
-  const base = apiBase();
-  if (!base) {
-    // No API yet (fallback mode): report cleanly so the UI can show a
-    // "demo only" state rather than pretend it persisted.
-    return {
-      ok: false,
-      error: "no_api",
-      message: "No approval API configured (NEXT_PUBLIC_API_URL unset).",
-    };
-  }
-
-  const url = `${base}/packs/${encodeURIComponent(args.runId)}/decision`;
   try {
-    const res = await fetch(url, {
+    const res = await fetch("/api/decision", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({
-        decision: args.decision,
-        evidence_hash: args.evidenceHash,
-        approver: args.approver ?? "dashboard-operator",
-        ...(args.note ? { note: args.note } : {}),
+        runId: args.runId,
+        payload: {
+          decision: args.decision,
+          evidence_hash: args.evidenceHash,
+          approver: args.approver ?? "dashboard-operator",
+          ...(args.note ? { note: args.note } : {}),
+        },
       }),
     });
 
+    if (res.status === 503) {
+      // Proxy reports the write API isn't configured (e.g. local dev w/o token).
+      return {
+        ok: false,
+        error: "no_api",
+        message: "No approval API configured.",
+      };
+    }
     if (res.status === 409) {
       return {
         ok: false,
