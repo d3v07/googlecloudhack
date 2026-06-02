@@ -52,9 +52,7 @@ def test_run_module_is_importable():
 
 def test_diagnosis_from_explain_no_sort_is_low_severity():
     explain = {
-        "queryPlanner": {
-            "winningPlan": {"stage": "FETCH", "inputStage": {"stage": "IXSCAN"}}
-        }
+        "queryPlanner": {"winningPlan": {"stage": "FETCH", "inputStage": {"stage": "IXSCAN"}}}
     }
 
     out = diagnosis_from_explain(explain, {"region": "x", "price": {"$gte": 1}}, [("ts", -1)])

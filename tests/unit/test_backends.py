@@ -26,6 +26,7 @@ def _make_evidence() -> Evidence:
 
 # ---- FakeBackend -----------------------------------------------------------
 
+
 def test_fake_backend_explain_returns_first_result():
     evidence = _make_evidence()
     backend = FakeBackend([evidence])
@@ -83,6 +84,7 @@ def test_fake_backend_close_is_noop():
 
 # ---- PymongoBackend construction (no real connection) ----------------------
 
+
 def test_pymongo_backend_constructs_without_connecting():
     # MongoClient is lazy — does not connect on __init__
     backend = PymongoBackend("mongodb://localhost:27017", "testdb", "testcoll")
@@ -90,6 +92,7 @@ def test_pymongo_backend_constructs_without_connecting():
 
 
 # ---- McpBackend importable without `mcp` installed -------------------------
+
 
 def test_mcp_backend_importable_without_mcp():
     # This confirms lazy imports inside methods work; `mcp` is not in dev deps
@@ -105,9 +108,7 @@ def test_mcp_backend_parse_explain_to_evidence():
     from agents.mcp_backend import _parse_explain_to_evidence
 
     raw = {
-        "queryPlanner": {
-            "winningPlan": {"stage": "FETCH", "inputStage": {"stage": "IXSCAN"}}
-        },
+        "queryPlanner": {"winningPlan": {"stage": "FETCH", "inputStage": {"stage": "IXSCAN"}}},
         "executionStats": {
             "totalDocsExamined": 20,
             "nReturned": 20,

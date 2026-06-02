@@ -83,7 +83,9 @@ class McpBackend:
                 raw = json.loads(text)
         return _parse_explain_to_evidence(raw, query_filter, query_sort, limit)
 
-    async def apply_index(self, keys: list[tuple[str, int]], name: str) -> None:  # pragma: no cover - live MCP I/O
+    async def apply_index(
+        self, keys: list[tuple[str, int]], name: str
+    ) -> None:  # pragma: no cover - live MCP I/O
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.stdio import stdio_client
 

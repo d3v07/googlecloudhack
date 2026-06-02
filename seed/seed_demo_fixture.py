@@ -84,6 +84,7 @@ GOLDEN_PATH = Path(__file__).parent / "fixtures" / "fixture_results.golden.json"
 
 # ---- connection -----------------------------------------------------------
 
+
 def get_uri() -> str:
     uri = os.environ.get("MONGODB_TARGET_URI")
     if uri:
@@ -94,10 +95,7 @@ def get_uri() -> str:
     user = os.environ.get("MONGODB_VERIFY_USER")
     pw = os.environ.get("MONGODB_VERIFY_PW")
     if user and pw:
-        return (
-            f"mongodb+srv://{user}:{pw}@target.7ehydqs.mongodb.net/"
-            "?retryWrites=true&w=majority"
-        )
+        return f"mongodb+srv://{user}:{pw}@target.7ehydqs.mongodb.net/?retryWrites=true&w=majority"
     sys.exit(
         "No connection string. Set MONGODB_TARGET_URI (preferred), "
         "MDB_MCP_CONNECTION_STRING, or "
@@ -106,6 +104,7 @@ def get_uri() -> str:
 
 
 # ---- seeding --------------------------------------------------------------
+
 
 def seed(client: MongoClient, count: int) -> None:
     """Generate slim demo docs deterministically.
@@ -159,6 +158,7 @@ def build_indexes(client: MongoClient) -> None:
 
 
 # ---- explain extraction ---------------------------------------------------
+
 
 def _walk_stages(plan: dict) -> list[str]:
     """Flatten queryPlanner.winningPlan into an ordered list of stage names."""
@@ -255,6 +255,7 @@ def verify(client: MongoClient) -> dict:
 
 # ---- golden ---------------------------------------------------------------
 
+
 def write_golden(results: dict, count: int) -> None:
     payload = {
         "fixtureVersion": 1,
@@ -262,7 +263,10 @@ def write_golden(results: dict, count: int) -> None:
         "docCount": count,
         "namespace": f"{DEMO_DB}.{DEMO_COLL}",
         "query": {
-            "filter": {"storeLocation": Q_STORE, "customer.age": {"$gte": Q_AGE_LO, "$lte": Q_AGE_HI}},
+            "filter": {
+                "storeLocation": Q_STORE,
+                "customer.age": {"$gte": Q_AGE_LO, "$lte": Q_AGE_HI},
+            },
             "sort": {"saleDate": -1},
             "limit": Q_LIMIT,
         },
@@ -287,6 +291,7 @@ def _keys_to_pairs(keys) -> list:
 
 
 # ---- cli ------------------------------------------------------------------
+
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Seed + verify the B-vs-C ESR fixture on target.")

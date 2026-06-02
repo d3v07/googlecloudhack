@@ -66,7 +66,9 @@ class EvidenceMetrics(BaseModel):
         # pydantic v2 omits computed_fields from model_json_schema; inject manually
         schema = handler(schema)
         schema.setdefault("properties", {})["has_blocking_sort"] = {
-            "readOnly": True, "title": "Has Blocking Sort", "type": "boolean"
+            "readOnly": True,
+            "title": "Has Blocking Sort",
+            "type": "boolean",
         }
         return schema
 
@@ -142,7 +144,10 @@ class EvidencePack(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     version: Literal["v1"] = "v1"
-    run_id: str = Field(min_length=1)
+    # constrained charset: run_id flows into a filesystem path (LocalFilePackStore) and a
+    # Mongo query key, and POST /run accepts a client-supplied id — the pattern blocks
+    # path traversal / injection at the contract boundary
+    run_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
     namespace: str = Field(min_length=1)
     status: PackStatus
     before: Evidence

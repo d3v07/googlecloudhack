@@ -173,7 +173,9 @@ def test_local_file_pack_store_get_missing(tmp_path: Path) -> None:
     assert store.get_pack("nonexistent") is None
 
 
-def test_create_app_with_existing_packs_dir_uses_local_file_store(tmp_path: Path, monkeypatch) -> None:
+def test_create_app_with_existing_packs_dir_uses_local_file_store(
+    tmp_path: Path, monkeypatch
+) -> None:
     monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
     for pack in _PACKS[:1]:
         write_pack(pack, tmp_path)
@@ -188,6 +190,7 @@ def test_create_app_with_existing_packs_dir_uses_local_file_store(tmp_path: Path
 def test_get_store_raises_when_not_overridden() -> None:
     import pytest
     from api.routes import get_store
+
     with pytest.raises(NotImplementedError):
         get_store()
 
@@ -202,6 +205,7 @@ def test_create_app_with_missing_packs_dir_uses_empty_store(monkeypatch) -> None
 
 
 # --- approve/reject route tests ---
+
 
 def _approval_client_and_store(pack: EvidencePack) -> tuple[TestClient, FakePackStore]:
     store = FakePackStore([pack])
@@ -255,6 +259,7 @@ def test_approve_already_approved_pack_returns_409() -> None:
 
 # --- /decision route (the dashboard's #26 endpoint) ---
 
+
 def test_decision_approve_returns_updated_pack() -> None:
     pack = _minimal_pack("run-dec")
     client, store = _approval_client_and_store(pack)
@@ -282,7 +287,9 @@ def test_decision_reject_returns_updated_pack() -> None:
 
 def test_decision_unknown_run_id_returns_404_not_found() -> None:
     client = TestClient(create_app(FakePackStore([])))
-    resp = client.post("/packs/nope/decision", json={"decision": "approve", "evidence_hash": "a" * 64})
+    resp = client.post(
+        "/packs/nope/decision", json={"decision": "approve", "evidence_hash": "a" * 64}
+    )
     assert resp.status_code == 404
     assert resp.json() == {"error": "not_found"}
 
@@ -303,13 +310,15 @@ def test_decision_already_decided_returns_409() -> None:
     pack = _minimal_pack("run-done", status=PackStatus.APPROVED)
     client, _ = _approval_client_and_store(pack)
     resp = client.post(
-        "/packs/run-done/decision", json={"decision": "approve", "evidence_hash": pack.evidence_hash}
+        "/packs/run-done/decision",
+        json={"decision": "approve", "evidence_hash": pack.evidence_hash},
     )
     assert resp.status_code == 409
     assert resp.json()["error"] == "already_decided"
 
 
 # --- save_pack store-level tests ---
+
 
 def test_mongo_pack_store_save_pack() -> None:
     pack = _minimal_pack("run-save-mongo")
@@ -337,10 +346,12 @@ def test_empty_pack_store_save_pack_raises() -> None:
 
 # --- secrets module tests ---
 
+
 def test_get_mongo_connection_string_returns_env_conn(monkeypatch) -> None:
     monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
     monkeypatch.setenv("MDB_MCP_CONNECTION_STRING", "mongodb://localhost:27017")
     from api.secrets import get_mongo_connection_string
+
     assert get_mongo_connection_string() == "mongodb://localhost:27017"
 
 
@@ -348,6 +359,7 @@ def test_get_mongo_connection_string_raises_when_neither_set(monkeypatch) -> Non
     monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
     monkeypatch.delenv("MDB_MCP_CONNECTION_STRING", raising=False)
     from api.secrets import get_mongo_connection_string
+
     with pytest.raises(RuntimeError, match="MONGO_SECRET_NAME"):
         get_mongo_connection_string()
 
@@ -373,6 +385,7 @@ def test_create_app_uses_empty_store_when_no_mongo_secret_and_no_dir(monkeypatch
 
 
 # --- POST /run route (#37 live-run trigger) ---
+
 
 class FakeRunner:
     def __init__(self) -> None:
@@ -415,6 +428,7 @@ def test_run_returned_pack_validates_as_evidence_pack() -> None:
 
 def test_get_runner_raises_when_not_overridden() -> None:
     from api.routes import get_runner
+
     with pytest.raises(NotImplementedError):
         get_runner()
 

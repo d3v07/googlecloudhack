@@ -19,6 +19,12 @@ def evidence_hash(evidence: Any) -> str:
     canonical = (
         _canonical_collection(evidence) if _is_collection(evidence) else _canonical(evidence)
     )
+    # strip volatile metadata only at the TOP level — never inside nested query/explain
+    # content. A field legitimately named e.g. "created_at" in a user query must still
+    # contribute to the hash, or two distinct queries would collide on the same hash (the
+    # hash is the integrity anchor binding evidence to the human-approved decision).
+    if isinstance(canonical, Mapping):
+        canonical = {key: item for key, item in canonical.items() if key not in _VOLATILE_KEYS}
     payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -39,7 +45,6 @@ def _canonical(value: Any) -> Any:
         return {
             str(key): _canonical(item)
             for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
-            if str(key) not in _VOLATILE_KEYS
         }
     if isinstance(value, bytes):
         return {"__bytes__": b64encode(value).decode("ascii")}

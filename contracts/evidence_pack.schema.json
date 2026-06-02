@@ -298,7 +298,9 @@
       "$ref": "#/$defs/Recommendation"
     },
     "run_id": {
+      "maxLength": 128,
       "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]+$",
       "title": "Run Id",
       "type": "string"
     },
