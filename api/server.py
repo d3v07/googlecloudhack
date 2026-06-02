@@ -54,10 +54,11 @@ class _EmptyPackStore:
 class _LiveRunner:  # pragma: no cover - live
     """Runs the deterministic orchestrator over the preset demo fixture for POST /run.
 
-    Holds only the connection string — the Mongo connection and the orchestrator/agents
-    imports are deferred to run() so constructing it at create_app() does no I/O and can't
-    regress the read endpoints. Narrator is intentionally off (the pack stays deterministic;
-    narration would need Vertex IAM on the Cloud Run SA)."""
+    Holds the connection string + a serialization lock; the Mongo connection and the
+    orchestrator imports are deferred to run() so constructing it at create_app() does no
+    I/O and can't regress the read endpoints. Imports stay within controller/ (packaged in
+    the read-API image) — never the agents/ layer. Narrator is intentionally off (the pack
+    stays deterministic; narration would need Vertex IAM on the Cloud Run SA)."""
 
     def __init__(self, connection_string: str) -> None:
         self._conn = connection_string
@@ -67,8 +68,8 @@ class _LiveRunner:  # pragma: no cover - live
         self._lock = asyncio.Lock()
 
     async def run(self, run_id: str) -> EvidencePack:
-        from agents.demo import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
         from controller.backends import PymongoBackend
+        from controller.demo_fixture import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
         from controller.orchestrator import INDEX_C_NAME, run_remediation
 
         async with self._lock:
