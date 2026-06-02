@@ -26,6 +26,10 @@ def test_write_tool_allowed_in_verify():
 def test_read_tools_allowed_in_every_phase():
     for phase in (Phase.DIAGNOSE, Phase.APPROVE, Phase.VERIFY):
         assert make_gate(phase)(_Tool("explain"), {}, None) is None
+        assert make_gate(phase)(_Tool("explain_slow_query"), {}, None) is None
+        assert make_gate(phase)(_Tool("compare_candidate_indexes"), {}, None) is None
+        assert make_gate(phase)(_Tool("diagnose_candidate"), {}, None) is None
+        assert make_gate(phase)(_Tool("rationalize_recommendation"), {}, None) is None
         assert make_gate(phase)(_Tool("diagnose_index"), {}, None) is None
 
 
@@ -34,3 +38,4 @@ def test_is_allowed_matrix():
     assert not is_allowed(Phase.DIAGNOSE, "create-index")
     assert not is_allowed(Phase.APPROVE, "drop-index")
     assert is_allowed(Phase.DIAGNOSE, "diagnose_index")
+    assert is_allowed(Phase.DIAGNOSE, "compare_candidate_indexes")
