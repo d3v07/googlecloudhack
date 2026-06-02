@@ -18,6 +18,7 @@ def test_cloudrun_deploy_fails_when_run_api_token_missing():
         {
             "RUN_API_TOKEN": "",
             "AGENT_ENGINE_RESOURCE": "projects/p/locations/us-central1/reasoningEngines/e",
+            "MONGO_SECRET_NAME": "mongo-uri",
         }
     )
 
@@ -26,7 +27,26 @@ def test_cloudrun_deploy_fails_when_run_api_token_missing():
 
 
 def test_cloudrun_deploy_fails_when_agent_engine_resource_missing():
-    result = _run_script({"RUN_API_TOKEN": "test-token", "AGENT_ENGINE_RESOURCE": ""})
+    result = _run_script(
+        {
+            "RUN_API_TOKEN": "test-token",
+            "AGENT_ENGINE_RESOURCE": "",
+            "MONGO_SECRET_NAME": "mongo-uri",
+        }
+    )
 
     assert result.returncode == 1
     assert "AGENT_ENGINE_RESOURCE is required" in result.stdout
+
+
+def test_cloudrun_deploy_fails_when_mongo_secret_name_missing():
+    result = _run_script(
+        {
+            "RUN_API_TOKEN": "test-token",
+            "AGENT_ENGINE_RESOURCE": "projects/p/locations/us-central1/reasoningEngines/e",
+            "MONGO_SECRET_NAME": "",
+        }
+    )
+
+    assert result.returncode == 1
+    assert "MONGO_SECRET_NAME is required" in result.stdout

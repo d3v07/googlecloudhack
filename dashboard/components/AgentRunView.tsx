@@ -13,6 +13,7 @@ import { StageIndicator } from "@/components/StageIndicator";
 import { PlanPanel } from "@/components/PlanPanel";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { ApproveBar } from "@/components/ApproveBar";
+import { TracePanel } from "@/components/TracePanel";
 import type { EvidencePack } from "@/lib/evidence";
 import type { PackSource } from "@/lib/api";
 import { askTheAgent } from "@/lib/run";
@@ -100,6 +101,11 @@ export function AgentRunView({
       </div>
 
       <StageIndicator status={pack.status} running={running} />
+      <TracePanel
+        trace={pack.agent_trace ?? []}
+        evidenceHash={pack.evidence_hash}
+        ledgerPersisted={source === "live"}
+      />
 
       <div className={styles.grid}>
         <PlanPanel before={pack.before} after={pack.after} />

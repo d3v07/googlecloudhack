@@ -48,6 +48,7 @@ from evals.grade import (
     grade_no_extra_indexes,
     grade_no_mutation_before_approval,
     grade_phase_gate,
+    grade_tokenless_writes_rejected,
 )
 
 # The #9 fixture query shape (the preset Denver/ESR demo).
@@ -105,6 +106,20 @@ def submit_approval(api_url: str, token: str, run_id: str, evidence_hash: str) -
         return json.loads(resp.read())
 
 
+def post_without_token(api_url: str, path: str, payload: dict) -> int:
+    req = urllib.request.Request(
+        f"{api_url.rstrip('/')}{path}",
+        data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 (trusted URL)
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
 def grade_live(card: Scorecard, api_url: str, token: str) -> dict | None:
     """Trigger the real agent and grade the returned pack. Returns the pack."""
     try:
@@ -154,11 +169,19 @@ def grade_diagram_live(card: Scorecard, api_url: str, token: str, connection_str
         verified = submit_approval(api_url, token, run_id, diagnosed["evidence_hash"])
         after_approve_indexes = indexes()
         ids = _ledger_record_ids(run_id)
-        present = {
-            collection
+        records = {
+            collection: doc
             for collection, record_id in ids.items()
-            if state[collection].find_one({"_id": record_id}) is not None
+            if (doc := state[collection].find_one({"_id": record_id}, projection={"_id": False}))
+            is not None
         }
+        present = set(records)
+        tokenless_run = post_without_token(api_url, "/run", {"run_id": f"{run_id}-no-token"})
+        tokenless_decision = post_without_token(
+            api_url,
+            f"/packs/{run_id}/decision",
+            {"decision": "approve", "evidence_hash": diagnosed["evidence_hash"]},
+        )
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError) as exc:
         card.add("diagram_live", False, f"diagram live check failed: {exc}")
         return
@@ -168,9 +191,10 @@ def grade_diagram_live(card: Scorecard, api_url: str, token: str, connection_str
     card.add("diagram_live", True, f"completed run_id={run_id}")
     card.checks.append(grade_agent_engine_used(diagnosed))
     card.checks.append(grade_no_mutation_before_approval(before_indexes, after_run_indexes))
-    card.checks.append(grade_ledger_records(present))
+    card.checks.append(grade_ledger_records(present, records))
     card.checks.append(grade_approval_verified(diagnosed, verified))
     card.checks.append(grade_no_extra_indexes(after_approve_indexes))
+    card.checks.append(grade_tokenless_writes_rejected(tokenless_run, tokenless_decision))
     card.checks.append(grade_latency(elapsed))
 
 

@@ -65,3 +65,28 @@
     transform: rotate(360deg);
   }
 }
+
+@media (max-width: 720px) {
+  .track {
+    flex-wrap: wrap;
+    gap: 12px 16px;
+  }
+
+  .step {
+    flex: 0 1 calc(50% - 8px);
+  }
+
+  .connector {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .track {
+    padding: 16px 18px;
+  }
+
+  .label {
+    font-size: 12px;
+  }
+}

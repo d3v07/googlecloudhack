@@ -13,9 +13,12 @@ The dashboard consumes `EvidencePack` JSON — via this schema and the read endp
 
 ## EvidencePack shape (v1)
 
-`version`, `run_id`, `namespace`, `status` (`diagnosed` / `approved` / `verified` / `rejected`), `before` (Evidence), `after` (Evidence | null), `finding`, `recommendation` (ordered `[field, direction]` index keys), `decision` (null until approved), `phase_log`, `evidence_hash`, `created_at`.
+`version`, `run_id`, `namespace`, `status` (`diagnosed` / `approved` / `verified` / `rejected`), `before` (Evidence), `after` (Evidence | null), `finding`, `recommendation` (ordered `[field, direction]` index keys), `decision` (null until approved), `phase_log`, `agent_trace`, `evidence_hash`, `created_at`.
 
 `evidence_hash` binds `before` + `recommendation` together — it pins *what gets applied given what evidence*, which is what a human approval signs off on. When `decision` is present its `evidence_hash` must equal the pack's.
+
+`agent_trace` is the dashboard-visible proof trail for the intended architecture:
+Agent Engine native tool events, deterministic validation, human approval, apply, and verify.
 
 ## Regenerate
 

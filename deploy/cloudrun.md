@@ -71,8 +71,9 @@ in the repo root and push the image to Artifact Registry automatically.
 > the client bundle.
 >
 > **Agent Engine:** `AGENT_ENGINE_RESOURCE` is required for deploy. `/run` uses that
-> resource as the diagnosis/rationale layer, then the deterministic controller validates
-> and emits the DIAGNOSED EvidencePack.
+> resource as the native read-only diagnosis/rationale layer, then the deterministic
+> controller validates and emits the DIAGNOSED EvidencePack. `MONGO_SECRET_NAME` is also
+> required; production must read MongoDB credentials from Secret Manager.
 
 ### What the script does
 
@@ -122,7 +123,8 @@ curl -sf "${SERVICE_URL}/packs/RUN_ID"
 curl -sf -X POST "${SERVICE_URL}/run" \
   -H "Content-Type: application/json" -H "X-API-Token: ${RUN_API_TOKEN}" -d '{}'
 # Expected: 200 + a DIAGNOSED EvidencePack (run_id "run-…", before≈17209 keys, blocking sort,
-# severity high, recommendation). No index is applied yet. (401 without a valid X-API-Token.)
+# severity high, recommendation, agent_trace with Agent Engine tool events). No index is
+# applied yet. (401 without a valid X-API-Token.)
 ```
 
 **Approve → apply + verify (the human-gated mutation):**
