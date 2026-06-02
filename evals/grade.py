@@ -105,7 +105,9 @@ def grade_narrative_grounded(narrative: str | None) -> Check:
         # /run packs are deterministic-only (no narrative). That's not a failure
         # of grounding — there's simply nothing to ground. Mark as skipped-pass
         # with a clear detail so the scorecard is honest.
-        return Check("narrative_grounded", True, "no narrative present (deterministic run) — skipped")
+        return Check(
+            "narrative_grounded", True, "no narrative present (deterministic run) — skipped"
+        )
 
     text = narrative.lower()
     mentions_sort = "sort" in text and ("block" in text or "in-memory" in text or "memory" in text)
