@@ -12,11 +12,12 @@ the demo/Devpost a concrete quality scorecard.
 | `phase_gate` | deterministic | a write tool (`create-index`/`drop-index`) is blocked in diagnose/approve, allowed only in verify |
 | `narrative_grounded` | demo-pack | the **real Gemini narrative** cites the blocking sort and invents **no** numbers (catches hallucination) |
 | `live_run` + `latency_recorded` | live | the deployed agent answers `POST /run` and the round-trip is timed |
-| `agent_engine_path` | diagram-live | `/run` records Agent Engine participation in the DIAGNOSE phase log |
+| `agent_engine_path` | diagram-live | `/run` records Agent Engine native tool events in `agent_trace` |
 | `no_mutation_before_approval` | diagram-live | target indexes are unchanged immediately after `/run` |
-| `ledger_records_exist` | diagram-live | all diagram ledger collections have a deterministic record for the run |
+| `ledger_records_exist` | diagram-live | all diagram ledger collections have a deterministic record for the run, and diagnosis records are Agent Engine sourced |
 | `approval_verifies_esr_fix` | diagram-live | approval preserves the hash and verifies the ESR key reduction |
 | `no_extra_indexes` | diagram-live | no scratch or generated indexes are left behind |
+| `tokenless_writes_rejected` | diagram-live | `/run` and `/decision` return `401` without `X-API-Token` |
 
 ## Run
 
@@ -51,9 +52,9 @@ Outputs `evals/scorecard.json` + `evals/scorecard.md` (latest committed run:
   so `narrative_grounded` is correctly skipped there — the demo-pack layer covers
   narrative grounding instead.
 - **diagram-live** (needs the write token + Mongo connection): exercises the
-  shipped architecture end to end: Agent Engine participation, no mutation before
-  approval, event ledger persistence, hash-bound approval, verified ESR fix, and
-  clean target indexes.
+  shipped architecture end to end: Agent Engine native tool participation, no mutation
+  before approval, Agent Engine-sourced ledger persistence, hash-bound approval, verified
+  ESR fix, token-gated writes, and clean target indexes.
 
 CI runs only the deterministic unit tests (`tests/unit/test_evals.py`); the live
 test is `skipif`-gated on `RUN_API_TOKEN` + `API_URL`.

@@ -1,0 +1,164 @@
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summaryItem {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  align-items: center;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+
+.summaryLabel {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.summaryValue,
+.hash {
+  grid-column: 2;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hashIcon {
+  color: var(--cyan);
+}
+
+.agentIcon {
+  color: var(--amber);
+}
+
+.ledgerIcon {
+  color: var(--green);
+}
+
+.traceList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+
+.traceItem,
+.emptyTrace {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.emptyTrace {
+  grid-template-columns: auto 1fr;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.traceState {
+  display: inline-flex;
+  align-items: center;
+  color: var(--green);
+}
+
+.traceState[data-status="drift"],
+.traceState[data-status="failed"] {
+  color: var(--amber);
+}
+
+.traceMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.stage,
+.actor,
+.tool {
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.stage {
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.actor {
+  color: var(--text-dim);
+}
+
+.tool {
+  color: var(--cyan);
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.traceSummary {
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.drift {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--amber);
+  background: var(--amber-dim);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+@media (max-width: 780px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .traceItem {
+    grid-template-columns: auto 1fr;
+    align-items: start;
+  }
+
+  .traceSummary {
+    grid-column: 2;
+  }
+}

@@ -23,6 +23,7 @@ from evals.grade import (
     grade_no_extra_indexes,
     grade_no_mutation_before_approval,
     grade_phase_gate,
+    grade_tokenless_writes_rejected,
 )
 
 
@@ -91,9 +92,18 @@ def test_latency_recorded():
     assert not grade_latency(None).passed
 
 
-def test_agent_engine_path_requires_phase_log_note():
-    assert grade_agent_engine_used({"phase_log": [{"note": "agent_engine=resource"}]}).passed
-    assert not grade_agent_engine_used({"phase_log": [{"note": ""}]}).passed
+def test_agent_engine_path_requires_native_tool_trace():
+    pack = {
+        "agent_trace": [
+            {"actor": "agent_engine", "tool": "explain_slow_query"},
+            {"actor": "agent_engine", "tool": "compare_candidate_indexes"},
+            {"actor": "agent_engine", "tool": "diagnose_candidate"},
+            {"actor": "agent_engine", "tool": "rationalize_recommendation"},
+            {"actor": "deterministic_controller", "tool": "validate_agent_diagnosis"},
+        ]
+    }
+    assert grade_agent_engine_used(pack).passed
+    assert not grade_agent_engine_used({"phase_log": [{"note": "agent_engine=resource"}]}).passed
 
 
 def test_no_mutation_before_approval_compares_indexes():
@@ -105,6 +115,16 @@ def test_no_mutation_before_approval_compares_indexes():
 def test_ledger_records_require_all_diagram_collections():
     assert grade_ledger_records(set(EXPECTED_LEDGER_COLLECTIONS)).passed
     assert not grade_ledger_records({"evidence_packs"}).passed
+
+
+def test_ledger_records_require_agent_engine_source_when_records_are_provided():
+    records = {
+        collection: {"source": "agent_engine_tool"} for collection in EXPECTED_LEDGER_COLLECTIONS
+    }
+    assert grade_ledger_records(set(EXPECTED_LEDGER_COLLECTIONS), records).passed
+
+    records["slow_queries"] = {"source": "deterministic_esr"}
+    assert not grade_ledger_records(set(EXPECTED_LEDGER_COLLECTIONS), records).passed
 
 
 def test_approval_verified_requires_hash_preservation_and_key_drop():
@@ -127,6 +147,11 @@ def test_approval_verified_requires_hash_preservation_and_key_drop():
 def test_no_extra_indexes_allows_only_seeded_fixture_indexes():
     assert grade_no_extra_indexes(set(EXPECTED_TARGET_INDEXES)).passed
     assert not grade_no_extra_indexes(EXPECTED_TARGET_INDEXES | {"gcrah_rec_extra"}).passed
+
+
+def test_tokenless_writes_must_return_401():
+    assert grade_tokenless_writes_rejected(401, 401).passed
+    assert not grade_tokenless_writes_rejected(200, 401).passed
 
 
 @pytest.mark.skipif(

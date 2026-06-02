@@ -51,6 +51,17 @@ EXPECTED_LEDGER_COLLECTIONS = {
     "verifications",
 }
 EXPECTED_TARGET_INDEXES = {"_id_", "esr_wrong_B", "esr_right_C"}
+EXPECTED_AGENT_TOOLS = {
+    "explain_slow_query",
+    "compare_candidate_indexes",
+    "diagnose_candidate",
+    "rationalize_recommendation",
+}
+AGENT_SOURCED_LEDGER = {
+    "slow_queries",
+    "candidates",
+    "experiments",
+}
 
 
 @dataclass
@@ -143,11 +154,19 @@ def grade_latency(elapsed_s: float | None) -> Check:
 
 
 def grade_agent_engine_used(pack: dict) -> Check:
-    notes = [
-        str(item.get("note", "")) for item in pack.get("phase_log", []) if isinstance(item, dict)
-    ]
-    used = any("agent_engine=" in note for note in notes)
-    detail = "Agent Engine note present" if used else "Agent Engine note missing from phase_log"
+    trace = pack.get("agent_trace", [])
+    tools = {
+        item.get("tool")
+        for item in trace
+        if isinstance(item, dict) and item.get("actor") == "agent_engine"
+    }
+    missing = EXPECTED_AGENT_TOOLS - tools
+    used = not missing
+    detail = (
+        f"Agent Engine tool trace present: {sorted(tools)}"
+        if used
+        else f"missing Agent Engine tool trace: {sorted(missing)}"
+    )
     return Check("agent_engine_path", used, detail)
 
 
@@ -163,13 +182,21 @@ def grade_no_mutation_before_approval(
     return Check("no_mutation_before_approval", ok, detail)
 
 
-def grade_ledger_records(collections_present: set[str]) -> Check:
+def grade_ledger_records(
+    collections_present: set[str], records: dict[str, dict] | None = None
+) -> Check:
     missing = EXPECTED_LEDGER_COLLECTIONS - collections_present
-    ok = not missing
+    source_mismatches: list[str] = []
+    if records is not None:
+        for collection in AGENT_SOURCED_LEDGER:
+            source = records.get(collection, {}).get("source")
+            if source != "agent_engine_tool":
+                source_mismatches.append(f"{collection}:{source or 'missing'}")
+    ok = not missing and not source_mismatches
     detail = (
-        f"all expected collections present: {sorted(collections_present)}"
+        f"all expected collections present with Agent Engine sources: {sorted(collections_present)}"
         if ok
-        else f"missing ledger collections: {sorted(missing)}"
+        else f"missing={sorted(missing)}; source_mismatches={source_mismatches or 'none'}"
     )
     return Check("ledger_records_exist", ok, detail)
 
@@ -204,3 +231,9 @@ def grade_no_extra_indexes(indexes: set[str]) -> Check:
         else f"unexpected indexes left behind: {sorted(extra)}"
     )
     return Check("no_extra_indexes", ok, detail)
+
+
+def grade_tokenless_writes_rejected(run_status: int | None, decision_status: int | None) -> Check:
+    ok = run_status == 401 and decision_status == 401
+    detail = f"POST /run={run_status}; POST /decision={decision_status}"
+    return Check("tokenless_writes_rejected", ok, detail)

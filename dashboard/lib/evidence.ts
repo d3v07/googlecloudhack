@@ -48,6 +48,25 @@ export interface Decision {
 }
 
 export type PackStatus = "diagnosed" | "approved" | "verified" | "rejected";
+export type AgentTraceStage =
+  | "detect"
+  | "diagnose"
+  | "candidate"
+  | "rationale"
+  | "approve"
+  | "apply"
+  | "verify";
+export type AgentTraceActor = "agent_engine" | "deterministic_controller" | "human";
+export type AgentTraceStatus = "ok" | "drift" | "failed";
+
+export interface AgentTraceEvent {
+  stage: AgentTraceStage;
+  actor: AgentTraceActor;
+  status: AgentTraceStatus;
+  summary: string;
+  tool: string | null;
+  ledger_ref: string | null;
+}
 
 export interface EvidencePack {
   version: string;
@@ -60,6 +79,7 @@ export interface EvidencePack {
   recommendation: Recommendation;
   decision: Decision | null;
   phase_log: unknown[];
+  agent_trace: AgentTraceEvent[];
   evidence_hash: string;
   created_at: string;
 }

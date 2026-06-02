@@ -32,7 +32,7 @@ GCP_PROJECT="${GCP_PROJECT:-performer-497915}"
 REGION="${REGION:-us-central1}"
 SERVICE_NAME="${SERVICE_NAME:-gcrah-read-api}"
 SERVICE_ACCOUNT="${SERVICE_ACCOUNT:-dbre-agent@${GCP_PROJECT}.iam.gserviceaccount.com}"
-MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-mongodb-connection-string}"
+MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-}"
 # Shared secret gating the write endpoints (POST /run, /decision). Reads stay public.
 # Required for production deploy: export RUN_API_TOKEN=$(openssl rand -hex 16)
 RUN_API_TOKEN="${RUN_API_TOKEN:-}"
@@ -47,6 +47,11 @@ fi
 if [ -z "${AGENT_ENGINE_RESOURCE}" ]; then
   echo "ERROR: AGENT_ENGINE_RESOURCE is required so POST /run uses Agent Engine diagnosis."
   echo "Set it to projects/<project-number>/locations/<region>/reasoningEngines/<id>."
+  exit 1
+fi
+if [ -z "${MONGO_SECRET_NAME}" ]; then
+  echo "ERROR: MONGO_SECRET_NAME is required so production reads MongoDB credentials from Secret Manager."
+  echo "Set it with: export MONGO_SECRET_NAME=mongodb-connection-string"
   exit 1
 fi
 
