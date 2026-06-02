@@ -4,7 +4,7 @@
  * Fetches an EvidencePack from the read API (#18, deployed at #31) and falls
  * back to the committed example pack when no API is configured or it is
  * unreachable — so the dashboard always renders something, and auto-upgrades to
- * live data the moment `NEXT_PUBLIC_API_URL` points at a real endpoint.
+ * live data the moment `API_URL` points at a real endpoint.
  *
  * Contract boundary unchanged: this module only ever produces `EvidencePack`
  * JSON; it never imports controller/ or agents/.
@@ -26,16 +26,25 @@ const EXAMPLE = examplePack as unknown as EvidencePack;
 
 /** The configured read API base, or null when unset. */
 export function apiBaseUrl(): string | null {
-  const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
+  // loadPack runs server-side (the page is server-rendered), so prefer the runtime
+  // API_URL — NEXT_PUBLIC_API_URL is inlined at build time and would be undefined in a
+  // container built before env is set. NEXT_PUBLIC stays as a build-time/static fallback.
+  const raw = (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL)?.trim();
   return raw ? raw.replace(/\/+$/, "") : null;
 }
 
 /**
- * Resolve which run to show: explicit arg > NEXT_PUBLIC_PACK_ID env > the
- * example pack's own run_id (so the fallback is self-consistent).
+ * Resolve which run to show: explicit arg > PACK_ID (runtime) > NEXT_PUBLIC_PACK_ID
+ * (build-time) > the live demo pack. The fallback to the bundled example happens in
+ * loadPack only when no API is configured or the fetch fails.
  */
 export function resolveRunId(explicit?: string): string {
-  return explicit?.trim() || process.env.NEXT_PUBLIC_PACK_ID?.trim() || EXAMPLE.run_id;
+  return (
+    explicit?.trim() ||
+    process.env.PACK_ID?.trim() ||
+    process.env.NEXT_PUBLIC_PACK_ID?.trim() ||
+    "demo-001"
+  );
 }
 
 /**
@@ -50,7 +59,7 @@ export async function loadPack(runId?: string): Promise<PackResult> {
     return {
       pack: EXAMPLE,
       source: "fallback",
-      notice: "No API configured (NEXT_PUBLIC_API_URL unset) — showing the bundled example pack.",
+      notice: "No API configured (API_URL unset) — showing the bundled example pack.",
     };
   }
 
