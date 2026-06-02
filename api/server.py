@@ -1,10 +1,11 @@
+import asyncio
 import os
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
 
-from api.routes import PackStore, get_store, router
+from api.routes import PackStore, Runner, get_runner, get_store, router
 from controller.persistence import load_pack, read_pack, save_pack, write_pack
 from controller.schemas import EvidencePack
 
@@ -50,7 +51,43 @@ class _EmptyPackStore:
         raise NotImplementedError("_EmptyPackStore cannot persist packs")
 
 
-def create_app(store: PackStore | None = None) -> FastAPI:
+class _LiveRunner:  # pragma: no cover - live
+    """Runs the deterministic orchestrator over the preset demo fixture for POST /run.
+
+    Holds only the connection string — the Mongo connection and the orchestrator/agents
+    imports are deferred to run() so constructing it at create_app() does no I/O and can't
+    regress the read endpoints. Narrator is intentionally off (the pack stays deterministic;
+    narration would need Vertex IAM on the Cloud Run SA)."""
+
+    def __init__(self, connection_string: str) -> None:
+        self._conn = connection_string
+        # serialize live runs within the instance — the deploy pins Cloud Run to
+        # max-instances=1 so this in-process lock fully serializes /run, which lets the
+        # pre-run sweep reclaim orphans without ever dropping a peer's in-flight scratch
+        self._lock = asyncio.Lock()
+
+    async def run(self, run_id: str) -> EvidencePack:
+        from agents.demo import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
+        from controller.backends import PymongoBackend
+        from controller.orchestrator import INDEX_C_NAME, run_remediation
+
+        async with self._lock:
+            backend = PymongoBackend(self._conn, DB, COLL)
+            try:
+                await backend.drop_scratch_indexes(f"{INDEX_C_NAME}__scratch__")
+                return await run_remediation(
+                    backend,
+                    run_id=run_id,
+                    namespace=f"{DB}.{COLL}",
+                    query_filter=QUERY_FILTER,
+                    query_sort=QUERY_SORT,
+                    limit=LIMIT,
+                )
+            finally:
+                backend.close()
+
+
+def create_app(store: PackStore | None = None, runner: Runner | None = None) -> FastAPI:
     app = FastAPI(title="GCRAH Evidence Pack API")
 
     if store is None:
@@ -59,13 +96,18 @@ def create_app(store: PackStore | None = None) -> FastAPI:
 
             from api.secrets import get_mongo_connection_string  # noqa: PLC0415
 
-            collection = MongoClient(get_mongo_connection_string())["dbre_state"]["evidence_packs"]
+            conn = get_mongo_connection_string()
+            collection = MongoClient(conn)["dbre_state"]["evidence_packs"]
             store = MongoPackStore(collection)
+            if runner is None:
+                runner = _LiveRunner(conn)
         else:
             packs_dir = Path(os.getenv("PACKS_DIR", "runs"))
             store = LocalFilePackStore(packs_dir) if packs_dir.exists() else _EmptyPackStore()
 
     app.dependency_overrides[get_store] = lambda: store
+    if runner is not None:
+        app.dependency_overrides[get_runner] = lambda: runner
     app.include_router(router)
     return app
 

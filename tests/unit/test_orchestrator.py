@@ -128,7 +128,7 @@ def test_scratch_index_cleaned_up():
 
     _run(backend)
 
-    scratch_name = f"{INDEX_C_NAME}__scratch"
+    scratch_name = f"{INDEX_C_NAME}__scratch__{RUN_ID}"
     assert scratch_name in backend.dropped_indexes
 
 
@@ -149,7 +149,7 @@ def test_scratch_index_dropped_even_when_after_has_sort():
 
     _run(backend)
 
-    scratch_name = f"{INDEX_C_NAME}__scratch"
+    scratch_name = f"{INDEX_C_NAME}__scratch__{RUN_ID}"
     assert scratch_name in backend.dropped_indexes
 
 
@@ -170,7 +170,7 @@ def test_apply_index_called_with_scratch_name():
 
     _run(backend)
 
-    scratch_name = f"{INDEX_C_NAME}__scratch"
+    scratch_name = f"{INDEX_C_NAME}__scratch__{RUN_ID}"
     applied_names = [name for _, name in backend.applied_indexes]
     assert scratch_name in applied_names
 

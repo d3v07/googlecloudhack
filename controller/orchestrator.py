@@ -69,7 +69,9 @@ async def run_remediation(
     phase = Phase.VERIFY
     phase_log.append(PhaseTransition(from_phase=Phase.APPROVE, to_phase=Phase.VERIFY))
 
-    scratch_name = f"{INDEX_C_NAME}__scratch"
+    # run_id-scoped so concurrent runs (e.g. a public POST /run clicked twice) never
+    # collide on a shared scratch-index name
+    scratch_name = f"{INDEX_C_NAME}__scratch__{run_id}"
     scratch_keys = list(rec.index_spec)
 
     await backend.apply_index(scratch_keys, scratch_name)

@@ -75,7 +75,7 @@ def test_scratch_index_cleaned_up_after_live_run():
     finally:
         backend.close()
 
-    scratch_name = f"{INDEX_C_NAME}__scratch"
+    scratch_name = f"{INDEX_C_NAME}__scratch__integration-test-cleanup"
     index_names = list(client[DB][COLL].index_information().keys())
     client.close()
     assert scratch_name not in index_names
