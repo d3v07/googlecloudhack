@@ -6,8 +6,9 @@ from fastapi import FastAPI
 
 from api.agent_engine import AgentEngineDiagnosisClient
 from api.routes import Engine, PackStore, get_engine, get_store, router
-from controller.persistence import load_pack, read_pack, save_pack, write_pack
+from controller.ledger_store import LedgerStore, MongoLedgerStore
 from controller.orchestrator import DiagnosisAdvisor
+from controller.persistence import load_pack, read_pack, save_pack, write_pack
 from controller.schemas import EvidencePack
 
 
@@ -62,10 +63,14 @@ class _LiveEngine:  # pragma: no cover - live
     narration would need Vertex IAM on the Cloud Run SA)."""
 
     def __init__(
-        self, connection_string: str, diagnosis_advisor: DiagnosisAdvisor | None = None
+        self,
+        connection_string: str,
+        diagnosis_advisor: DiagnosisAdvisor | None = None,
+        ledger: LedgerStore | None = None,
     ) -> None:
         self._conn = connection_string
         self._diagnosis_advisor = diagnosis_advisor
+        self._ledger = ledger
 
     def _backend(self):
         from controller.backends import PymongoBackend
@@ -87,26 +92,38 @@ class _LiveEngine:  # pragma: no cover - live
                 query_sort=QUERY_SORT,
                 limit=LIMIT,
                 advisor=self._diagnosis_advisor,
+                ledger=self._ledger,
             )
         finally:
             backend.close()
 
-    async def apply_and_verify(self, pack: EvidencePack) -> EvidencePack:
+    async def apply_and_verify(
+        self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
+    ) -> EvidencePack:
         from controller.demo_fixture import LIMIT, QUERY_FILTER, QUERY_SORT
         from controller.orchestrator import apply_and_verify
 
         backend = self._backend()
         try:
             return await apply_and_verify(
-                backend, pack, query_filter=QUERY_FILTER, query_sort=QUERY_SORT, limit=LIMIT
+                backend,
+                pack,
+                query_filter=QUERY_FILTER,
+                query_sort=QUERY_SORT,
+                limit=LIMIT,
+                approver=approver,
+                note=note,
+                ledger=self._ledger,
             )
         finally:
             backend.close()
 
-    def reject(self, pack: EvidencePack) -> EvidencePack:
+    def reject(
+        self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
+    ) -> EvidencePack:
         from controller.orchestrator import reject_pack
 
-        return reject_pack(pack)
+        return reject_pack(pack, approver=approver, note=note, ledger=self._ledger)
 
 
 def create_app(store: PackStore | None = None, engine: Engine | None = None) -> FastAPI:
@@ -119,10 +136,13 @@ def create_app(store: PackStore | None = None, engine: Engine | None = None) -> 
             from api.secrets import get_mongo_connection_string  # noqa: PLC0415
 
             conn = get_mongo_connection_string()
-            collection = MongoClient(conn)["dbre_state"]["evidence_packs"]
+            state_db = MongoClient(conn)["dbre_state"]
+            collection = state_db["evidence_packs"]
             store = MongoPackStore(collection)
             if engine is None:
-                engine = _LiveEngine(conn, AgentEngineDiagnosisClient.from_env())
+                engine = _LiveEngine(
+                    conn, AgentEngineDiagnosisClient.from_env(), MongoLedgerStore(state_db)
+                )
         else:
             packs_dir = Path(os.getenv("PACKS_DIR", "runs"))
             store = LocalFilePackStore(packs_dir) if packs_dir.exists() else _EmptyPackStore()

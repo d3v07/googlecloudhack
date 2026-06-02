@@ -16,6 +16,12 @@ from typing import Protocol
 
 from controller.backends import Backend
 from controller.diagnosis import diagnose
+from controller.ledger_store import (
+    LedgerStore,
+    write_application_records,
+    write_diagnosis_records,
+    write_rejection_records,
+)
 from controller.narrate import Narrator
 from controller.pack import build_pack
 from controller.phases import Phase, assert_phase_transition
@@ -96,6 +102,7 @@ async def run_diagnosis(
     created_at: str | None = None,
     narrator: Narrator | None = None,
     advisor: DiagnosisAdvisor | None = None,
+    ledger: LedgerStore | None = None,
     current_index: str = INDEX_B_NAME,
 ) -> EvidencePack:
     """Read-only DIAGNOSE phase. Returns a DIAGNOSED pack with NO decision and NO mutation —
@@ -138,7 +145,16 @@ async def run_diagnosis(
         ],
         narrative=advice.narrative if advice is not None else None,
     )
-    return await _maybe_narrate(pack, narrator)
+    pack = await _maybe_narrate(pack, narrator)
+    write_diagnosis_records(
+        ledger,
+        pack=pack,
+        query_filter=query_filter,
+        query_sort=query_sort,
+        limit=limit,
+        current_index=current_index,
+    )
+    return pack
 
 
 async def apply_and_verify(
@@ -148,6 +164,9 @@ async def apply_and_verify(
     query_sort: list[tuple[str, int]],
     limit: int,
     narrator: Narrator | None = None,
+    approver: str = "dashboard-operator",
+    note: str = "",
+    ledger: LedgerStore | None = None,
 ) -> EvidencePack:
     """Post-approval APPLY + VERIFY. Applies the recommended index (the human-approved
     mutation) and captures after-evidence. VERIFIED if the blocking sort is gone, else
@@ -167,7 +186,8 @@ async def apply_and_verify(
     phase_log.append(PhaseTransition(from_phase=Phase.APPROVE, to_phase=Phase.VERIFY))
 
     index_keys = list(pack.recommendation.index_spec)
-    await backend.apply_index(index_keys, _recommended_index_name(pack.recommendation))
+    index_name = _recommended_index_name(pack.recommendation)
+    await backend.apply_index(index_keys, index_name)
     # hint by key pattern so verify uses the recommended index even if it already existed
     # under another name (the apply was a conflict-absorbed no-op)
     after = await backend.explain(query_filter, query_sort, limit, hint=index_keys)
@@ -186,10 +206,24 @@ async def apply_and_verify(
         phase_log=phase_log,
         narrative=pack.narrative,
     )
-    return await _maybe_narrate(updated, narrator)
+    updated = await _maybe_narrate(updated, narrator)
+    write_application_records(
+        ledger,
+        pack=updated,
+        approver=approver,
+        note=note,
+        index_name=index_name,
+    )
+    return updated
 
 
-def reject_pack(pack: EvidencePack) -> EvidencePack:
+def reject_pack(
+    pack: EvidencePack,
+    *,
+    approver: str = "dashboard-operator",
+    note: str = "",
+    ledger: LedgerStore | None = None,
+) -> EvidencePack:
     """Record a human rejection — no mutation, no after-evidence."""
     if pack.status is not PackStatus.DIAGNOSED:
         raise ValueError(f"can only reject a DIAGNOSED pack, got '{pack.status}'")
@@ -197,7 +231,7 @@ def reject_pack(pack: EvidencePack) -> EvidencePack:
     decision = Decision(
         action=DecisionAction.REJECT, evidence_hash=pack.evidence_hash, phase=Phase.APPROVE
     )
-    return build_pack(
+    rejected = build_pack(
         run_id=pack.run_id,
         namespace=pack.namespace,
         created_at=pack.created_at,
@@ -212,3 +246,5 @@ def reject_pack(pack: EvidencePack) -> EvidencePack:
         ],
         narrative=pack.narrative,
     )
+    write_rejection_records(ledger, pack=rejected, approver=approver, note=note)
+    return rejected
