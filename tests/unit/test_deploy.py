@@ -44,3 +44,13 @@ def test_agent_env_vars_use_secret_manager_reference(monkeypatch):
 
     assert env_vars["MONGODB_TARGET_URI"] == {"secret": "mongo-uri", "version": "3"}
     assert env_vars["GEMINI_MODEL"] == "gemini-3-flash"
+
+
+def test_deploy_uses_packaging_create_api():
+    import inspect
+
+    from agents import deploy
+
+    source = inspect.getsource(deploy.deploy)
+    assert "agent_engines.create(" in source
+    assert "client.agent_engines.create" not in source
