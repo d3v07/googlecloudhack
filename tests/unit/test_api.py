@@ -424,3 +424,39 @@ def test_create_app_uses_empty_store_when_no_mongo_secret_and_no_dir(monkeypatch
     app = create_app()
     with TestClient(app) as c:
         assert c.get("/packs").json() == []
+
+
+# --- write-token auth (RUN_API_TOKEN gates the mutating endpoints) ---
+
+
+def test_run_requires_token_when_configured(monkeypatch) -> None:
+    monkeypatch.setenv("RUN_API_TOKEN", "s3cret")
+    client = TestClient(create_app(FakePackStore([]), FakeEngine()))
+    assert client.post("/run").status_code == 401  # missing
+    assert client.post("/run", headers={"X-API-Token": "wrong"}).status_code == 401
+    assert client.post("/run", headers={"X-API-Token": "s3cret"}).status_code == 200
+
+
+def test_decision_requires_token_when_configured(monkeypatch) -> None:
+    monkeypatch.setenv("RUN_API_TOKEN", "s3cret")
+    pack = _minimal_pack("run-tok")
+    client, _, engine = _decision_setup(pack)
+    body = {"decision": "approve", "evidence_hash": pack.evidence_hash}
+    assert client.post("/packs/run-tok/decision", json=body).status_code == 401
+    assert engine.applied == []  # an unauthenticated write never reaches the engine
+    ok = client.post("/packs/run-tok/decision", json=body, headers={"X-API-Token": "s3cret"})
+    assert ok.status_code == 200
+
+
+def test_writes_are_open_when_token_unset(monkeypatch) -> None:
+    monkeypatch.delenv("RUN_API_TOKEN", raising=False)
+    client = TestClient(create_app(FakePackStore([]), FakeEngine()))
+    assert client.post("/run").status_code == 200  # gate is a no-op without the env var
+
+
+def test_reads_never_require_token(monkeypatch) -> None:
+    monkeypatch.setenv("RUN_API_TOKEN", "s3cret")
+    client = TestClient(create_app(FakePackStore(_PACKS), FakeEngine()))
+    assert client.get("/health").status_code == 200
+    assert client.get("/packs").status_code == 200
+    assert client.get("/packs/run-001").status_code == 200

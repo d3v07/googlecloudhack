@@ -1,13 +1,23 @@
+import os
+import secrets
 from typing import Annotated, Literal, Protocol
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from controller.schemas import EvidencePack, PackStatus
 
 router = APIRouter()
+
+
+def require_write_token(x_api_token: Annotated[str | None, Header()] = None) -> None:
+    """Gate the mutating endpoints behind a shared secret when RUN_API_TOKEN is set. No-op
+    when it's unset (local dev / CI). Reads (/health, /packs) are always public."""
+    expected = os.environ.get("RUN_API_TOKEN")
+    if expected and not (x_api_token and secrets.compare_digest(x_api_token, expected)):
+        raise HTTPException(status_code=401, detail="invalid or missing API token")
 
 
 class PackStore(Protocol):
@@ -59,7 +69,7 @@ class RunRequest(BaseModel):
     run_id: str | None = None
 
 
-@router.post("/run")
+@router.post("/run", dependencies=[Depends(require_write_token)])
 async def trigger_run(store: StoreDep, engine: EngineDep, body: RunRequest | None = None) -> dict:
     """Trigger a DIAGNOSE-only live run over the preset demo fixture (#37). Returns a
     DIAGNOSED pack — NO database mutation happens here. The recommended index is applied only
@@ -78,7 +88,7 @@ class DecisionRequest(BaseModel):
     note: str = ""
 
 
-@router.post("/packs/{run_id}/decision")
+@router.post("/packs/{run_id}/decision", dependencies=[Depends(require_write_token)])
 async def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep, engine: EngineDep):
     """The dashboard's approve/reject endpoint. On approve the recommended index is applied
     and the fix verified (the human-gated mutation); on reject the decision is recorded with

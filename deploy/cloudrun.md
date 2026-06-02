@@ -56,11 +56,18 @@ Run from the **repo root**:
 ```bash
 export GCP_PROJECT=performer-497915
 export MONGO_SECRET_NAME=mongodb-connection-string
+export RUN_API_TOKEN=$(openssl rand -hex 16)   # gates the write endpoints; reads stay public
 bash deploy/deploy_cloudrun.sh
 ```
 
 The script uses `--source .` which triggers Cloud Build to build from the `Dockerfile`
 in the repo root and push the image to Artifact Registry automatically.
+
+> **Write auth:** `POST /run` and `POST /packs/{id}/decision` require the
+> `X-API-Token` header to match `RUN_API_TOKEN`. If `RUN_API_TOKEN` is empty at deploy,
+> the script warns and the writes are unauthenticated. Reads (`/health`, `/packs`) are
+> always public. The dashboard must send the token (server-side proxy preferred over
+> exposing it in the client bundle).
 
 ### What the script does
 
@@ -68,6 +75,7 @@ in the repo root and push the image to Artifact Registry automatically.
 2. Calls `gcloud run deploy` with:
    - `GOOGLE_CLOUD_PROJECT=performer-497915` — used by the Secret Manager client
    - `MONGO_SECRET_NAME=mongodb-connection-string` — the secret name (not the value)
+   - `RUN_API_TOKEN` — shared secret gating the write endpoints
    - SA: `dbre-agent@performer-497915.iam.gserviceaccount.com`
    - 0–3 instances, 512 MiB, 1 vCPU
 3. Prints the live service URL.
@@ -105,15 +113,16 @@ curl -sf "${SERVICE_URL}/packs/RUN_ID"
 
 **Trigger a DIAGNOSE-only live run (#37 — read-only, no mutation):**
 ```bash
-curl -sf -X POST "${SERVICE_URL}/run" -H "Content-Type: application/json" -d '{}'
+curl -sf -X POST "${SERVICE_URL}/run" \
+  -H "Content-Type: application/json" -H "X-API-Token: ${RUN_API_TOKEN}" -d '{}'
 # Expected: 200 + a DIAGNOSED EvidencePack (run_id "run-…", before≈17209 keys, blocking sort,
-# severity high, recommendation). No index is applied yet.
+# severity high, recommendation). No index is applied yet. (401 without a valid X-API-Token.)
 ```
 
 **Approve → apply + verify (the human-gated mutation):**
 ```bash
 curl -sf -X POST "${SERVICE_URL}/packs/RUN_ID/decision" \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/json" -H "X-API-Token: ${RUN_API_TOKEN}" \
   -d '{"decision": "approve", "evidence_hash": "<hash-from-pack>"}'
 # Applies the recommended index and verifies → 200 + a VERIFIED pack (after≈64 keys, no sort).
 # 409 stale_evidence_hash if the hash doesn't match; 409 already_decided if not DIAGNOSED.

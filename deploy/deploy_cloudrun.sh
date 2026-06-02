@@ -31,7 +31,14 @@ REGION="${REGION:-us-central1}"
 SERVICE_NAME="${SERVICE_NAME:-gcrah-read-api}"
 SERVICE_ACCOUNT="${SERVICE_ACCOUNT:-dbre-agent@${GCP_PROJECT}.iam.gserviceaccount.com}"
 MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-mongodb-connection-string}"
+# Shared secret gating the write endpoints (POST /run, /decision). Reads stay public.
+# If empty, writes are UNAUTHENTICATED — set it: export RUN_API_TOKEN=$(openssl rand -hex 16)
+RUN_API_TOKEN="${RUN_API_TOKEN:-}"
 # ───────────────────────────────────────────────────────────────────────────────
+
+if [ -z "${RUN_API_TOKEN}" ]; then
+  echo "WARNING: RUN_API_TOKEN is empty — POST /run and /decision will be UNAUTHENTICATED."
+fi
 
 echo "==> Granting Secret Manager accessor role to ${SERVICE_ACCOUNT}"
 gcloud secrets add-iam-policy-binding "${MONGO_SECRET_NAME}" \
@@ -49,7 +56,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --project "${GCP_PROJECT}" \
   --allow-unauthenticated \
   --service-account "${SERVICE_ACCOUNT}" \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME}" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME},RUN_API_TOKEN=${RUN_API_TOKEN}" \
   --port 8080 \
   --min-instances 0 \
   --max-instances 3 \
