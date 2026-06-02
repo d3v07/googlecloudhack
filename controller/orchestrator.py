@@ -50,9 +50,7 @@ async def run_remediation(
     rec = diagnosis.recommendation
     finding = diagnosis.finding
 
-    phase_log: list[PhaseTransition] = [
-        PhaseTransition(from_phase=None, to_phase=Phase.DIAGNOSE)
-    ]
+    phase_log: list[PhaseTransition] = [PhaseTransition(from_phase=None, to_phase=Phase.DIAGNOSE)]
 
     # auto-approve
     assert_phase_transition(phase, Phase.APPROVE)

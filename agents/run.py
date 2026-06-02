@@ -27,7 +27,9 @@ QUERY_SORT = [("saleDate", -1)]
 LIMIT = 20
 
 
-def fetch_explain(connection_string: str, timeout: float = 90.0) -> dict:  # pragma: no cover - live MCP I/O
+def fetch_explain(
+    connection_string: str, timeout: float = 90.0
+) -> dict:  # pragma: no cover - live MCP I/O
     env = {**os.environ, "MDB_MCP_CONNECTION_STRING": connection_string}
     proc = subprocess.Popen(
         ["npx", "-y", "mongodb-mcp-server", "--readOnly", "false"],
@@ -76,18 +78,33 @@ def fetch_explain(connection_string: str, timeout: float = 90.0) -> dict:  # pra
         deadline = time.time() + timeout
         init_id = send(
             "initialize",
-            {"protocolVersion": "2024-11-05", "capabilities": {},
-             "clientInfo": {"name": "gcrah", "version": "0.1"}},
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "gcrah", "version": "0.1"},
+            },
         )
         wait_for(init_id, deadline)
         send("notifications/initialized", notify=True)
         call_id = send(
             "tools/call",
-            {"name": "explain", "arguments": {
-                "database": DB, "collection": COLL,
-                "method": [{"name": "find", "arguments": {
-                    "filter": QUERY_FILTER, "sort": {"saleDate": -1}, "limit": LIMIT}}],
-            }},
+            {
+                "name": "explain",
+                "arguments": {
+                    "database": DB,
+                    "collection": COLL,
+                    "method": [
+                        {
+                            "name": "find",
+                            "arguments": {
+                                "filter": QUERY_FILTER,
+                                "sort": {"saleDate": -1},
+                                "limit": LIMIT,
+                            },
+                        }
+                    ],
+                },
+            },
         )
         resp = wait_for(call_id, deadline)
         if "error" in resp:

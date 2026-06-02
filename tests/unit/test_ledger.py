@@ -61,3 +61,17 @@ def test_evidence_hash_is_order_independent_for_sets():
 
 def test_evidence_hash_handles_byte_values():
     assert evidence_hash({"explain": b"abc"}) == evidence_hash({"explain": b"abc"})
+
+
+def test_evidence_hash_does_not_strip_volatile_names_nested_in_query():
+    # volatile-key stripping must NOT reach inside user query content: two queries that
+    # differ only in a field named like a volatile key must hash differently (#3 collision)
+    left = {"query": {"created_at": {"$gte": "2020-01-01"}}}
+    right = {"query": {"created_at": {"$gte": "2099-01-01"}}}
+    assert evidence_hash(left) != evidence_hash(right)
+
+
+def test_evidence_hash_still_strips_top_level_volatile_metadata():
+    assert evidence_hash({"x": 1, "created_at": "t1"}) == evidence_hash(
+        {"x": 1, "created_at": "t2"}
+    )

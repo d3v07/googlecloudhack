@@ -28,7 +28,8 @@ def test_recommends_esr_order_c_for_the_fixture_trap():
     trap = _golden()["results"]["indexB"]  # B present -> blocking sort, the trap state
 
     diagnosis = diagnose(
-        query_filter, query_sort,
+        query_filter,
+        query_sort,
         has_blocking_sort=trap["hasSort"],
         current_index=trap["indexName"],
     )
@@ -48,7 +49,9 @@ def test_recommendation_is_not_the_obvious_wrong_b_order():
 def test_finding_names_the_blocking_sort():
     query_filter, query_sort = _query()
 
-    diagnosis = diagnose(query_filter, query_sort, has_blocking_sort=True, current_index="esr_wrong_B")
+    diagnosis = diagnose(
+        query_filter, query_sort, has_blocking_sort=True, current_index="esr_wrong_B"
+    )
 
     assert "sort" in diagnosis.finding.problem.lower()
     assert diagnosis.finding.evidence_refs == ("esr_wrong_B",)

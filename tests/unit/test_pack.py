@@ -28,14 +28,19 @@ def _before() -> Evidence:
         query={"filter": QUERY_FILTER, "sort": QUERY_SORT, "limit": 20},
         explain_plan={"stage": "FETCH", "inputStage": {"stage": "SORT"}},
         metrics=EvidenceMetrics(
-            docs_examined=20, docs_returned=20, millis=41, total_keys_examined=17209,
+            docs_examined=20,
+            docs_returned=20,
+            millis=41,
+            total_keys_examined=17209,
             stages=("FETCH", "SORT", "IXSCAN"),
         ),
     )
 
 
 def _diagnosed_pack() -> EvidencePack:
-    diagnosis = diagnose(QUERY_FILTER, QUERY_SORT, has_blocking_sort=True, current_index="esr_wrong_B")
+    diagnosis = diagnose(
+        QUERY_FILTER, QUERY_SORT, has_blocking_sort=True, current_index="esr_wrong_B"
+    )
     return build_pack(
         run_id="r1",
         namespace="sample_supplies.sales_agent_demo",
@@ -64,13 +69,20 @@ def test_hash_changes_when_the_recommendation_changes():
 
 def test_decision_must_bind_the_pack_hash():
     pack = _diagnosed_pack()
-    mismatched = Decision(action=DecisionAction.APPROVE, evidence_hash="0" * 64, phase=Phase.APPROVE)
+    mismatched = Decision(
+        action=DecisionAction.APPROVE, evidence_hash="0" * 64, phase=Phase.APPROVE
+    )
 
     with pytest.raises(ValidationError):
         EvidencePack(
-            run_id=pack.run_id, namespace=pack.namespace, created_at=pack.created_at,
-            status=PackStatus.APPROVED, before=pack.before, finding=pack.finding,
-            recommendation=pack.recommendation, decision=mismatched,
+            run_id=pack.run_id,
+            namespace=pack.namespace,
+            created_at=pack.created_at,
+            status=PackStatus.APPROVED,
+            before=pack.before,
+            finding=pack.finding,
+            recommendation=pack.recommendation,
+            decision=mismatched,
             evidence_hash=pack.evidence_hash,
         )
 
@@ -82,9 +94,15 @@ def test_matching_decision_is_accepted():
     )
 
     approved = EvidencePack(
-        run_id=pack.run_id, namespace=pack.namespace, created_at=pack.created_at,
-        status=PackStatus.APPROVED, before=pack.before, finding=pack.finding,
-        recommendation=pack.recommendation, decision=good, evidence_hash=pack.evidence_hash,
+        run_id=pack.run_id,
+        namespace=pack.namespace,
+        created_at=pack.created_at,
+        status=PackStatus.APPROVED,
+        before=pack.before,
+        finding=pack.finding,
+        recommendation=pack.recommendation,
+        decision=good,
+        evidence_hash=pack.evidence_hash,
     )
 
     assert approved.decision.evidence_hash == approved.evidence_hash

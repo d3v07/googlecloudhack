@@ -15,7 +15,10 @@ def _pack():
         query={"filter": {"storeLocation": "Denver"}, "limit": 20},
         explain_plan={"stage": "FETCH"},
         metrics=EvidenceMetrics(
-            docs_examined=20, docs_returned=20, millis=41, total_keys_examined=17209,
+            docs_examined=20,
+            docs_returned=20,
+            millis=41,
+            total_keys_examined=17209,
             stages=("FETCH", "SORT", "IXSCAN"),
         ),
     )

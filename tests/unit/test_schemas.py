@@ -42,11 +42,17 @@ def test_evidence_model_rejects_negative_metrics():
 
 def test_has_blocking_sort_is_derived_from_stages():
     sorted_plan = EvidenceMetrics(
-        docs_examined=20, docs_returned=20, millis=1, total_keys_examined=17209,
+        docs_examined=20,
+        docs_returned=20,
+        millis=1,
+        total_keys_examined=17209,
         stages=("FETCH", "SORT", "IXSCAN"),
     )
     streamed_plan = EvidenceMetrics(
-        docs_examined=20, docs_returned=20, millis=1, total_keys_examined=64,
+        docs_examined=20,
+        docs_returned=20,
+        millis=1,
+        total_keys_examined=64,
         stages=("LIMIT", "FETCH", "IXSCAN"),
     )
 
@@ -68,7 +74,9 @@ def test_models_are_frozen():
     evidence = Evidence(
         query={"tenant": 42, "nested": {"status": "open"}, "stages": [{"name": "ixscan"}]},
         explain_plan={"stage": "IXSCAN", "inputStage": {"indexName": "tenant_1"}},
-        metrics=EvidenceMetrics(docs_examined=3, docs_returned=1, millis=0.7, total_keys_examined=2),
+        metrics=EvidenceMetrics(
+            docs_examined=3, docs_returned=1, millis=0.7, total_keys_examined=2
+        ),
     )
 
     with pytest.raises(ValidationError):
@@ -106,7 +114,11 @@ def test_recommendation_index_spec_preserves_order_and_is_immutable():
     )
 
     # order is preserved exactly (the ESR contract) and survives JSON serialization
-    assert recommendation.index_spec == (("storeLocation", 1), ("saleDate", -1), ("customer.age", 1))
+    assert recommendation.index_spec == (
+        ("storeLocation", 1),
+        ("saleDate", -1),
+        ("customer.age", 1),
+    )
     assert recommendation.model_dump(mode="json")["index_spec"] == [
         ["storeLocation", 1],
         ["saleDate", -1],

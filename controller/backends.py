@@ -46,7 +46,9 @@ class PymongoBackend:
             capture_evidence, self._coll, query_filter, query_sort, limit, hint
         )
 
-    async def apply_index(self, keys: list[tuple[str, int]], name: str) -> None:  # pragma: no cover - live I/O
+    async def apply_index(
+        self, keys: list[tuple[str, int]], name: str
+    ) -> None:  # pragma: no cover - live I/O
         from pymongo.errors import OperationFailure
 
         def _create() -> None:

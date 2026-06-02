@@ -24,7 +24,9 @@ INSTRUCTION = (
 )
 
 
-def build_mcp_toolset(connection_string: str | None = None):  # pragma: no cover - live MCP (npx + mcp pkg)
+def build_mcp_toolset(
+    connection_string: str | None = None,
+):  # pragma: no cover - live MCP (npx + mcp pkg)
     """Wire the published MongoDB MCP server over stdio. Imports are local so this
     module stays importable without the `mcp` package installed (CI)."""
     from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams

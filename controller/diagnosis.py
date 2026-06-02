@@ -50,9 +50,7 @@ def diagnose(
     equality, sort_fields, range_fields = _classify(query_filter, query_sort)
     recommended = _esr_index(equality, sort_fields, range_fields)
     sort_names = [field for field, _ in sort_fields]
-    ordering = (
-        f"Equality{equality} -> Sort{sort_names} -> Range{range_fields}"
-    )
+    ordering = f"Equality{equality} -> Sort{sort_names} -> Range{range_fields}"
 
     if has_blocking_sort:
         finding = Finding(
