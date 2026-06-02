@@ -18,7 +18,7 @@ from typing import Any
 
 from google.protobuf import json_format
 
-from agents.agent import root_agent
+from agents.agent_engine_factory import build_adk_app
 
 _REQUIREMENTS = [
     "google-cloud-aiplatform[agent_engines]>=1.112",
@@ -31,8 +31,8 @@ _REQUIREMENTS_FILE = "agents/agent_engine_requirements.txt"
 _MIN_INSTANCES = 1
 _MAX_INSTANCES = 1
 _SOURCE_PACKAGES = ("agents", "controller")
-_ENTRYPOINT_MODULE = "agents.agent"
-_ENTRYPOINT_OBJECT = "root_agent"
+_ENTRYPOINT_MODULE = "agents.agent_engine_app"
+_ENTRYPOINT_OBJECT = "adk_app"
 
 
 def _staging_bucket(project: str) -> str:
@@ -48,10 +48,15 @@ def _resource_name(remote_agent) -> str:
     )
 
 
-def _agent_env_vars() -> dict[str, str | dict[str, str]]:
+def _agent_env_vars(
+    project: str | None = None,
+    location: str | None = None,
+) -> dict[str, str | dict[str, str]]:
     secret_name = os.environ.get("MONGO_SECRET_NAME", "mongodb-connection-string")
     secret_version = os.environ.get("MONGO_SECRET_VERSION", "latest")
     return {
+        "GOOGLE_CLOUD_PROJECT": project or os.environ.get("GOOGLE_CLOUD_PROJECT", ""),
+        "GOOGLE_CLOUD_LOCATION": location or os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
         "MONGODB_TARGET_URI": {"secret": secret_name, "version": secret_version},
         "GEMINI_MODEL": os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
     }
@@ -61,15 +66,9 @@ def _class_methods_for_source_deploy(
     project: str | None = None,
     location: str | None = None,
 ) -> list[dict[str, Any]]:
-    import vertexai
-    from vertexai import agent_engines
     from vertexai.agent_engines import _agent_engines
 
-    vertexai.init(
-        project=project or os.environ.get("GOOGLE_CLOUD_PROJECT", "local-ci"),
-        location=location or os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
-    )
-    app = agent_engines.AdkApp(agent=root_agent, app_name="gcrah_dbre_agent")
+    app = build_adk_app(project, location)
     operations = _agent_engines._get_registered_operations(app)
     methods = _agent_engines._generate_class_methods_spec_or_raise(
         agent_engine=app,
@@ -85,7 +84,7 @@ def deploy() -> str:  # pragma: no cover - live deploy
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
     staging_bucket = _staging_bucket(project)
-    env_vars = _agent_env_vars()
+    env_vars = _agent_env_vars(project, location)
 
     print(f"PROJECT={project}")
     print(f"LOCATION={location}")
