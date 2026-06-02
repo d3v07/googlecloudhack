@@ -11,9 +11,17 @@ import pytest
 from evals.grade import (
     ESR_CORRECT_C,
     OBVIOUS_WRONG_B,
+    EXPECTED_LEDGER_COLLECTIONS,
+    EXPECTED_TARGET_INDEXES,
+    Scorecard,
+    grade_agent_engine_used,
+    grade_approval_verified,
     grade_esr_correct,
+    grade_ledger_records,
     grade_latency,
     grade_narrative_grounded,
+    grade_no_extra_indexes,
+    grade_no_mutation_before_approval,
     grade_phase_gate,
 )
 
@@ -32,6 +40,21 @@ def test_esr_correct_accepts_list_of_lists():
     # the API returns index_spec as JSON lists, not tuples
     spec = [["storeLocation", 1], ["saleDate", -1], ["customer.age", 1]]
     assert grade_esr_correct(spec).passed
+
+
+def test_esr_correct_fails_on_unexpected_index():
+    check = grade_esr_correct([["storeLocation", 1]])
+    assert not check.passed
+    assert "unexpected" in check.detail
+
+
+def test_scorecard_summary_and_passed_state():
+    card = Scorecard()
+    card.add("one", True, "ok")
+    card.add("two", False, "bad")
+
+    assert not card.passed
+    assert card.summary == "1/2 checks passed"
 
 
 def test_phase_gate_blocks_writes_outside_verify():
@@ -66,6 +89,44 @@ def test_narrative_grounded_tolerates_missing_narrative():
 def test_latency_recorded():
     assert grade_latency(1.5).passed
     assert not grade_latency(None).passed
+
+
+def test_agent_engine_path_requires_phase_log_note():
+    assert grade_agent_engine_used({"phase_log": [{"note": "agent_engine=resource"}]}).passed
+    assert not grade_agent_engine_used({"phase_log": [{"note": ""}]}).passed
+
+
+def test_no_mutation_before_approval_compares_indexes():
+    indexes = {"_id_", "esr_wrong_B", "esr_right_C"}
+    assert grade_no_mutation_before_approval(indexes, set(indexes)).passed
+    assert not grade_no_mutation_before_approval(indexes, indexes | {"extra"}).passed
+
+
+def test_ledger_records_require_all_diagram_collections():
+    assert grade_ledger_records(set(EXPECTED_LEDGER_COLLECTIONS)).passed
+    assert not grade_ledger_records({"evidence_packs"}).passed
+
+
+def test_approval_verified_requires_hash_preservation_and_key_drop():
+    diagnosed = {
+        "status": "diagnosed",
+        "evidence_hash": "a" * 64,
+        "before": {"metrics": {"total_keys_examined": 17209}},
+    }
+    verified = {
+        "status": "verified",
+        "evidence_hash": "a" * 64,
+        "after": {"metrics": {"total_keys_examined": 64, "has_blocking_sort": False}},
+    }
+    assert grade_approval_verified(diagnosed, verified).passed
+
+    drifted = {**verified, "evidence_hash": "b" * 64}
+    assert not grade_approval_verified(diagnosed, drifted).passed
+
+
+def test_no_extra_indexes_allows_only_seeded_fixture_indexes():
+    assert grade_no_extra_indexes(set(EXPECTED_TARGET_INDEXES)).passed
+    assert not grade_no_extra_indexes(EXPECTED_TARGET_INDEXES | {"gcrah_rec_extra"}).passed
 
 
 @pytest.mark.skipif(

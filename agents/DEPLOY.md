@@ -143,7 +143,9 @@ which is worse.
    operations — keeps everything Python.
 3. Build a custom Agent Engine container image that bundles Node, enabling npx at runtime.
 
-For the hackathon demo the `diagnose_index` FunctionTool covers the core ESR diagnosis path.
+For the shipped demo, Cloud Run captures live Mongo evidence with Python and calls this
+Agent Engine resource for diagnosis/rationale. The deterministic controller validates
+the ESR winner, hash, phase gate, apply, verification, and ledger writes.
 
 ## Cost Notes
 

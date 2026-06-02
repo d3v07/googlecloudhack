@@ -22,6 +22,7 @@
 #   export GCP_PROJECT=performer-497915
 #   export MONGO_SECRET_NAME=mongodb-connection-string
 #   export AGENT_ENGINE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<id>
+#   export RUN_API_TOKEN=$(openssl rand -hex 16)
 #   bash deploy/deploy_cloudrun.sh
 
 set -euo pipefail
@@ -33,13 +34,15 @@ SERVICE_NAME="${SERVICE_NAME:-gcrah-read-api}"
 SERVICE_ACCOUNT="${SERVICE_ACCOUNT:-dbre-agent@${GCP_PROJECT}.iam.gserviceaccount.com}"
 MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-mongodb-connection-string}"
 # Shared secret gating the write endpoints (POST /run, /decision). Reads stay public.
-# If empty, writes are UNAUTHENTICATED — set it: export RUN_API_TOKEN=$(openssl rand -hex 16)
+# Required for production deploy: export RUN_API_TOKEN=$(openssl rand -hex 16)
 RUN_API_TOKEN="${RUN_API_TOKEN:-}"
 AGENT_ENGINE_RESOURCE="${AGENT_ENGINE_RESOURCE:-}"
 # ───────────────────────────────────────────────────────────────────────────────
 
 if [ -z "${RUN_API_TOKEN}" ]; then
-  echo "WARNING: RUN_API_TOKEN is empty — POST /run and /decision will be UNAUTHENTICATED."
+  echo "ERROR: RUN_API_TOKEN is required so POST /run and /decision are authenticated."
+  echo "Set it with: export RUN_API_TOKEN=\$(openssl rand -hex 16)"
+  exit 1
 fi
 if [ -z "${AGENT_ENGINE_RESOURCE}" ]; then
   echo "ERROR: AGENT_ENGINE_RESOURCE is required so POST /run uses Agent Engine diagnosis."

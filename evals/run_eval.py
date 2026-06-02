@@ -8,14 +8,19 @@ Grades the DBRE agent's diagnosis quality on the #9 fixture and emits a scorecar
     index C, not B, with no model or network.
 
   * LIVE (opt-in): triggers the deployed agent via `POST {API_URL}/run` (real
-    ADK + Gemini + MCP on Agent Engine), then grades the returned EvidencePack —
+    Agent Engine + deterministic controller), then grades the returned EvidencePack —
     its recommendation, its narrative grounding, and the round-trip latency.
     Skipped unless RUN_API_TOKEN + API_URL are set.
+
+  * DIAGRAM-LIVE (opt-in): triggers `/run`, approves the returned pack, inspects
+    Mongo ledger records and target indexes, and grades the intended architecture
+    properties end to end.
 
 Usage:
     uv run python -m evals.run_eval                 # deterministic only
     # with RUN_API_TOKEN + API_URL in env/.env:
     uv run python -m evals.run_eval --live          # + live graded run
+    uv run python -m evals.run_eval --diagram-live  # + architecture gate
 
 Outputs: evals/scorecard.json, evals/scorecard.md
 """
@@ -31,17 +36,26 @@ import urllib.request
 from pathlib import Path
 
 from controller.diagnosis import diagnose
+from controller.explain import get_connection_string
 from evals.grade import (
     Scorecard,
+    grade_agent_engine_used,
+    grade_approval_verified,
     grade_esr_correct,
+    grade_ledger_records,
     grade_latency,
     grade_narrative_grounded,
+    grade_no_extra_indexes,
+    grade_no_mutation_before_approval,
     grade_phase_gate,
 )
 
 # The #9 fixture query shape (the preset Denver/ESR demo).
 QUERY_FILTER = {"storeLocation": "Denver", "customer.age": {"$gte": 30, "$lte": 50}}
 QUERY_SORT = [("saleDate", -1)]
+TARGET_DB = "sample_supplies"
+TARGET_COLL = "sales_agent_demo"
+STATE_DB = "dbre_state"
 
 OUT_JSON = Path(__file__).parent / "scorecard.json"
 OUT_MD = Path(__file__).parent / "scorecard.md"
@@ -57,11 +71,14 @@ def grade_deterministic(card: Scorecard) -> None:
     card.checks.append(grade_phase_gate())
 
 
-def trigger_live_run(api_url: str, token: str, timeout: float = 120.0) -> tuple[dict, float]:
+def trigger_live_run(
+    api_url: str, token: str, timeout: float = 120.0, run_id: str | None = None
+) -> tuple[dict, float]:
     """POST /run on the deployed read API; return (pack, elapsed_seconds)."""
+    body = {} if run_id is None else {"run_id": run_id}
     req = urllib.request.Request(
         f"{api_url.rstrip('/')}/run",
-        data=b"{}",
+        data=json.dumps(body).encode(),
         headers={"content-type": "application/json", "x-api-token": token},
         method="POST",
     )
@@ -69,6 +86,23 @@ def trigger_live_run(api_url: str, token: str, timeout: float = 120.0) -> tuple[
     with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (trusted URL)
         pack = json.loads(resp.read())
     return pack, time.monotonic() - start
+
+
+def submit_approval(api_url: str, token: str, run_id: str, evidence_hash: str) -> dict:
+    payload = {
+        "decision": "approve",
+        "evidence_hash": evidence_hash,
+        "approver": "eval-diagram",
+        "note": "diagram conformance eval",
+    }
+    req = urllib.request.Request(
+        f"{api_url.rstrip('/')}/packs/{run_id}/decision",
+        data=json.dumps(payload).encode(),
+        headers={"content-type": "application/json", "x-api-token": token},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310 (trusted URL)
+        return json.loads(resp.read())
 
 
 def grade_live(card: Scorecard, api_url: str, token: str) -> dict | None:
@@ -85,6 +119,59 @@ def grade_live(card: Scorecard, api_url: str, token: str) -> dict | None:
     card.checks.append(grade_narrative_grounded(pack.get("narrative")))
     card.checks.append(grade_latency(elapsed))
     return pack
+
+
+def _ledger_record_ids(run_id: str) -> dict[str, str]:
+    return {
+        "slow_queries": f"{run_id}:diagnose:slow_query",
+        "candidates": f"{run_id}:diagnose:candidate",
+        "experiments": f"{run_id}:diagnose:before",
+        "decisions": f"{run_id}:approve:decision",
+        "evidence_packs": run_id,
+        "approvals": f"{run_id}:approve:approval",
+        "applications": f"{run_id}:approve:application",
+        "verifications": f"{run_id}:verify:verification",
+    }
+
+
+def grade_diagram_live(card: Scorecard, api_url: str, token: str, connection_string: str) -> None:
+    """Live diagram-conformance check: /run is read-only, approval mutates/verifies,
+    Agent Engine participates, ledger records exist, and target indexes stay clean."""
+    from pymongo import MongoClient
+
+    run_id = f"eval-diagram-{int(time.time())}"
+    client = MongoClient(connection_string)
+    target = client[TARGET_DB][TARGET_COLL]
+    state = client[STATE_DB]
+
+    def indexes() -> set[str]:
+        return {index["name"] for index in target.list_indexes()}
+
+    try:
+        before_indexes = indexes()
+        diagnosed, elapsed = trigger_live_run(api_url, token, timeout=300, run_id=run_id)
+        after_run_indexes = indexes()
+        verified = submit_approval(api_url, token, run_id, diagnosed["evidence_hash"])
+        after_approve_indexes = indexes()
+        ids = _ledger_record_ids(run_id)
+        present = {
+            collection
+            for collection, record_id in ids.items()
+            if state[collection].find_one({"_id": record_id}) is not None
+        }
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError) as exc:
+        card.add("diagram_live", False, f"diagram live check failed: {exc}")
+        return
+    finally:
+        client.close()
+
+    card.add("diagram_live", True, f"completed run_id={run_id}")
+    card.checks.append(grade_agent_engine_used(diagnosed))
+    card.checks.append(grade_no_mutation_before_approval(before_indexes, after_run_indexes))
+    card.checks.append(grade_ledger_records(present))
+    card.checks.append(grade_approval_verified(diagnosed, verified))
+    card.checks.append(grade_no_extra_indexes(after_approve_indexes))
+    card.checks.append(grade_latency(elapsed))
 
 
 def grade_demo_pack(card: Scorecard, api_url: str, pack_id: str = "demo-001") -> dict | None:
@@ -139,6 +226,11 @@ def main() -> int:
         action="store_true",
         help="also grade the pre-seeded demo-001 pack's real Gemini narrative (read-only)",
     )
+    ap.add_argument(
+        "--diagram-live",
+        action="store_true",
+        help="run the live diagram-conformance gate: /run, approval, ledger, indexes",
+    )
     args = ap.parse_args()
 
     api_url = os.environ.get("API_URL") or os.environ.get("NEXT_PUBLIC_API_URL")
@@ -161,6 +253,19 @@ def main() -> int:
         else:
             parts.append("live")
             grade_live(card, api_url, token)
+
+    if args.diagram_live:
+        token = os.environ.get("RUN_API_TOKEN")
+        connection_string = get_connection_string()
+        if not (api_url and token and connection_string):
+            card.add(
+                "diagram_live",
+                False,
+                "skipped: API_URL / RUN_API_TOKEN / Mongo connection string not set",
+            )
+        else:
+            parts.append("diagram-live")
+            grade_diagram_live(card, api_url, token, connection_string)
 
     mode = "+".join(parts)
 

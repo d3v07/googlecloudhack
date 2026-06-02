@@ -1,18 +1,31 @@
 # googlecloudhack — Evidence-Driven DBRE Agent
 
-A Gemini-powered MongoDB performance engineer: detects slow queries, proposes indexes with
-*predicted* plan changes, benchmarks candidates, and gates `apply` behind human approval —
-shipping a hashed evidence pack for every fix.
+A Gemini-powered MongoDB performance engineer: detects slow queries, proposes ESR-correct
+indexes from real `explain` evidence, gates `apply` behind human approval, verifies the
+result, and ships a hashed evidence pack plus an internal event ledger for every fix.
 
-> **Status:** Day-0 — scaffold + runtime decision landed.
+> **Status:** Day-4 — live Cloud Run demo with Agent Engine-backed diagnosis, human-gated
+> apply/verify, and Evidence Ledger collections.
 
 ## Architecture
 
-Five demo stages (Detect → Diagnose → Test → Approve → Verify) over a seven-phase engine.
+Five demo stages (Detect → Diagnose → Test → Approve → Verify) over a deterministic
+three-phase safety engine (DIAGNOSE → APPROVE → VERIFY).
 
-**Runtime: Vertex AI Agent Engine + ADK.** Agent Builder's declarative model can't express our
-per-phase tool allowlists or human-in-loop approval pause; Agent Engine runs the custom ADK Python
-that does both — proven on Day 0 by the scripts in [`spikes/day0_runtime/`](spikes/day0_runtime/).
+Current production path:
+
+```text
+Dashboard -> FastAPI Cloud Run -> Agent Engine advisor -> deterministic controller
+          -> DIAGNOSED EvidencePack -> human approval -> apply + verify
+```
+
+Agent Engine participates in diagnosis/rationale. Deterministic Python remains the safety
+authority: it recomputes the ESR winner, evidence hash, phase transitions, index apply, and
+verification. `/run` is read-only; `/packs/{run_id}/decision` is the only mutation path.
+
+The dashboard reads only `EvidencePack` JSON. Internally, MongoDB persists ledger collections
+for `slow_queries`, `candidates`, `experiments`, `decisions`, `evidence_packs`, `approvals`,
+`applications`, and `verifications`.
 
 ## Quickstart
 

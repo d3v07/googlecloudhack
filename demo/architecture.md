@@ -1,9 +1,9 @@
 # Architecture — Evidence-Driven DBRE Agent
 
 A Gemini-powered MongoDB performance engineer. It detects a slow query, diagnoses
-the root cause from the real `explain` plan, proposes the correct index with a
-*predicted* plan change, gates the apply behind human approval, and ships a
-**hashed evidence pack** for every fix.
+the root cause from real `explain` evidence, proposes the correct ESR index,
+gates the apply behind human approval, verifies the result, and ships a
+**hashed evidence pack** plus an internal event ledger for every fix.
 
 Five operator-facing **stages** sit over a three-phase safety **engine**
 (Diagnose → Approve → Verify), itself the core of the original seven-phase
@@ -18,38 +18,37 @@ flowchart TB
     end
 
     subgraph gcp["Google Cloud"]
-        API["Read / Decision API<br/>FastAPI on Cloud Run"]
-        AE["Agent Engine + ADK<br/>(Gemini 3)"]
+        API["Controller API<br/>FastAPI on Cloud Run"]
+        AE["Agent Engine + ADK<br/>diagnosis / rationale advisor"]
         SM["Secret Manager"]
     end
 
-    subgraph agentlayer["Agent (Gemini 3, reasoning only)"]
-        DIAG["Diagnose agent<br/>reads explain → finding"]
-        NARR["Narration layer<br/>renders rationale"]
-    end
-
-    subgraph core["Deterministic core (no LLM)"]
+    subgraph core["Deterministic controller"]
         EXPLAIN["explain.py<br/>stage + counter extraction"]
         DECIDE["diagnosis.py<br/>ESR winner selection"]
         PACK["pack.py<br/>EvidencePack + SHA-256 hash"]
         GATE["phases.py<br/>phase-gated transitions"]
+        ORCH["orchestrator.py<br/>diagnose → approve → verify"]
     end
 
     subgraph data["MongoDB Atlas"]
         TARGET[("target cluster<br/>sales_agent_demo")]
-        MCP["MongoDB MCP server<br/>explain / index / find"]
+        STATE[("agent-state cluster<br/>Evidence Ledger")]
+        LEDGER["slow_queries<br/>candidates<br/>experiments<br/>decisions<br/>evidence_packs<br/>approvals<br/>applications<br/>verifications"]
     end
 
     DASH -- "GET /packs/:id" --> API
-    DASH -- "POST /packs/:id/approve|reject" --> API
-    API --> PACK
-    AE --> DIAG --> EXPLAIN
-    EXPLAIN --> MCP --> TARGET
-    DIAG --> DECIDE --> PACK
-    NARR --> PACK
-    GATE -. enforces .-> AE
+    DASH -- "POST /run" --> API
+    DASH -- "POST /packs/:id/decision" --> API
+    API -- "/run asks for diagnosis/rationale" --> AE
+    API --> ORCH
+    ORCH --> EXPLAIN --> TARGET
+    ORCH --> DECIDE --> PACK
+    GATE -. enforces .-> ORCH
+    ORCH -- "diagnosis/application/verification events" --> LEDGER --> STATE
+    PACK -- "EvidencePack aggregate" --> STATE
+    API -- "approved apply only" --> TARGET
     API -- reads creds --> SM
-    AE -- reads creds --> SM
 
     PACK -- "EvidencePack JSON (contract)" --> API
 ```
@@ -59,10 +58,10 @@ flowchart TB
 | Stage (UI) | Engine phase | What happens | Who does it |
 |------------|-------------|--------------|-------------|
 | **Detect** | (pre) | Slow query surfaced from the fixture / logs | deterministic |
-| **Diagnose** | `DIAGNOSE` | Read `explain`, extract stages + counters, identify the blocking-sort root cause | Gemini reads, deterministic code extracts |
-| **Test** | `DIAGNOSE` | Propose index **C** (correct ESR) with a *predicted* plan change | Gemini proposes, code validates |
+| **Diagnose** | `DIAGNOSE` | Read `explain`, extract stages + counters, identify the blocking-sort root cause | Agent Engine advises, deterministic code validates |
+| **Test** | `DIAGNOSE` | Propose index **C** (correct ESR) from the measured evidence | Agent Engine proposes, deterministic code recomputes |
 | **Approve** | `APPROVE` | Human reviews the evidence pack and approves/rejects, keyed to `evidence_hash` | **human gate** |
-| **Verify** | `VERIFY` | Apply index on a scratch namespace, re-`explain`, confirm the sort is gone | deterministic |
+| **Verify** | `VERIFY` | Apply the approved index, re-`explain`, confirm the sort is gone | deterministic |
 
 ## Why this is an agent, not a chat loop
 
@@ -75,9 +74,9 @@ Three things make it a real plan-and-execute system (and the reason we run on
 2. **Human-in-loop pause** — the controller blocks at `APPROVE` until a decision
    arrives carrying the matching `evidence_hash`. The API returns `409` if the
    hash is stale (the evidence changed under the operator).
-3. **Gemini never decides or applies** — it reads explain summaries and proposes;
-   the *winner selection*, the *hash*, and the *apply* are deterministic Python.
-   The LLM renders the rationale; it never computes it.
+3. **Gemini never decides or applies** — Agent Engine can propose and explain,
+   but the *winner selection*, the *hash*, the *apply*, and the *verification*
+   are deterministic Python.
 
 ## The contract boundary
 
@@ -86,3 +85,8 @@ The dashboard depends on **one thing only**: `EvidencePack` JSON
 `agents/`, or any backend module — it reads packs from the API and POSTs
 decisions back. Backend internals can change freely behind the frozen `v1`
 schema.
+
+The internal Evidence Ledger is richer than the dashboard contract. MongoDB
+stores event collections for `slow_queries`, `candidates`, `experiments`,
+`decisions`, `approvals`, `applications`, and `verifications`, plus the
+`evidence_packs` aggregate the dashboard reads.

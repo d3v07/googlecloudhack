@@ -20,8 +20,8 @@ import styles from "@/app/page.module.css";
 
 /**
  * The interactive run view (#37). Seeded with the server-loaded pack; the "Ask
- * the agent" button triggers a live diagnosis (POST /api/run → real ADK+Gemini
- * agent) and swaps the rendered pack for the freshly-produced one. The 5-stage
+ * the agent" button triggers a live diagnosis (POST /api/run) and swaps the
+ * rendered pack for the freshly-produced one. The 5-stage
  * indicator shows a running state while the agent works.
  */
 export function AgentRunView({
@@ -38,6 +38,12 @@ export function AgentRunView({
   const [notice, setNotice] = useState<string | undefined>(initialNotice);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const statusLabel =
+    pack.status === "diagnosed"
+      ? "pending approval"
+      : pack.status === "verified"
+        ? "verified"
+        : pack.status;
 
   async function onAsk() {
     setRunning(true);
@@ -67,7 +73,7 @@ export function AgentRunView({
           <span className={styles.dot}>·</span>
           <code>{pack.namespace}</code>
           <span className={styles.status} data-status={pack.status}>
-            {pack.status}
+            {statusLabel}
           </span>
           <span className={styles.source} data-source={source} title={notice ?? "Live read API"}>
             {source === "live" ? <WifiHigh size={13} /> : <WifiSlash size={13} />}
@@ -87,8 +93,8 @@ export function AgentRunView({
         </button>
         <span className={styles.askHint}>
           {running
-            ? "Running the live ADK + Gemini agent over the Denver/ESR fixture…"
-            : "Triggers a real diagnosis run and renders the resulting evidence pack."}
+            ? "Running the live Agent Engine diagnosis over the Denver/ESR fixture…"
+            : "Triggers a diagnosis run and renders the resulting evidence pack."}
         </span>
         {error && <span className={styles.askError}>{error}</span>}
       </div>
@@ -105,7 +111,7 @@ export function AgentRunView({
       <footer className={styles.footer}>
         EvidencePack <code>{pack.version}</code>
         {source === "live"
-          ? " · live from the read API"
+          ? " · live from the read API · ledger persisted"
           : ` · ${notice ?? "showing the bundled example"}`}
       </footer>
     </main>

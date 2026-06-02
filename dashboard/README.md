@@ -2,7 +2,8 @@
 
 Operator dashboard for the Evidence-Driven DBRE agent. One route renders an
 **EvidencePack** (the ESR B→C scenario): the 5-stage pipeline, the before/after
-explain comparison, the finding + recommendation, and an Approve action.
+explain comparison, the finding + recommendation, the approval-bound evidence
+hash, and the approve/reject action.
 
 ## Run
 
@@ -72,8 +73,20 @@ components/
   StageIndicator    Detect → Diagnose → Test → Approve → Verify
   PlanPanel         before/after explain (keys examined, stage chain, sort flag)
   EvidencePanel     finding (severity) + recommendation (index spec + rationale)
-  ApproveBar        evidence hash + Approve button (inert until Day 3+)
+  ApproveBar        evidence hash + approve/reject buttons
 lib/
   evidence.ts       EvidencePack v1 types + helpers
   example_pack.json committed sample pack (static data source)
 ```
+
+## Live workflow
+
+- **Ask the agent** calls the same-origin `/api/run` proxy, which forwards to the
+  Cloud Run API with the server-side token.
+- The returned pack is `diagnosed`, shown as **pending approval**. No database
+  mutation happens during this step.
+- **Approve fix** posts the displayed `evidence_hash` through the same-origin
+  decision proxy. The backend applies and verifies the index only after that
+  hash-bound approval.
+- The footer shows when the pack came from the live API, where the EvidencePack
+  aggregate and internal ledger event collections are persisted.

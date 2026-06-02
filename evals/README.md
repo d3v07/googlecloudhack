@@ -12,6 +12,11 @@ the demo/Devpost a concrete quality scorecard.
 | `phase_gate` | deterministic | a write tool (`create-index`/`drop-index`) is blocked in diagnose/approve, allowed only in verify |
 | `narrative_grounded` | demo-pack | the **real Gemini narrative** cites the blocking sort and invents **no** numbers (catches hallucination) |
 | `live_run` + `latency_recorded` | live | the deployed agent answers `POST /run` and the round-trip is timed |
+| `agent_engine_path` | diagram-live | `/run` records Agent Engine participation in the DIAGNOSE phase log |
+| `no_mutation_before_approval` | diagram-live | target indexes are unchanged immediately after `/run` |
+| `ledger_records_exist` | diagram-live | all diagram ledger collections have a deterministic record for the run |
+| `approval_verifies_esr_fix` | diagram-live | approval preserves the hash and verifies the ESR key reduction |
+| `no_extra_indexes` | diagram-live | no scratch or generated indexes are left behind |
 
 ## Run
 
@@ -25,10 +30,14 @@ uv run python -m evals.run_eval --demo-pack
 # + trigger and grade a live agent run (needs RUN_API_TOKEN + API_URL)
 set -a && source dashboard/.env.local && set +a
 uv run python -m evals.run_eval --demo-pack --live
+
+# + run the full diagram-conformance gate (also needs Mongo connection string)
+uv run --with python-dotenv python -m dotenv run -- \
+  uv run python -m evals.run_eval --demo-pack --diagram-live
 ```
 
 Outputs `evals/scorecard.json` + `evals/scorecard.md` (latest committed run:
-**9/9 PASS** across deterministic + demo-pack + live).
+**PASS** across deterministic, demo-pack, live, and diagram-live gates).
 
 ## Layers, and why
 
@@ -37,10 +46,14 @@ Outputs `evals/scorecard.json` + `evals/scorecard.md` (latest committed run:
 - **demo-pack** (read-only HTTP): grades the pre-seeded `demo-001` pack, the one
   pack that carries a real Gemini narrative — this is where anti-hallucination
   meets actual model output.
-- **live** (needs the write token): triggers the real ADK + Gemini + MCP agent
-  on Agent Engine via `POST /run` and grades the returned pack. `/run` packs are
-  deterministic-only (no narrative), so `narrative_grounded` is correctly skipped
-  there — the demo-pack layer covers narrative grounding instead.
+- **live** (needs the write token): triggers the Agent Engine-backed `/run` path
+  and grades the returned pack. `/run` packs are deterministic-only (no narrative),
+  so `narrative_grounded` is correctly skipped there — the demo-pack layer covers
+  narrative grounding instead.
+- **diagram-live** (needs the write token + Mongo connection): exercises the
+  shipped architecture end to end: Agent Engine participation, no mutation before
+  approval, event ledger persistence, hash-bound approval, verified ESR fix, and
+  clean target indexes.
 
 CI runs only the deterministic unit tests (`tests/unit/test_evals.py`); the live
 test is `skipif`-gated on `RUN_API_TOKEN` + `API_URL`.
