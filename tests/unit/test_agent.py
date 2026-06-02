@@ -1,4 +1,7 @@
+import pickle
+
 from agents.agent import build_agent
+from agents.agent_engine_factory import build_adk_app
 from controller.phases import Phase
 
 
@@ -24,3 +27,12 @@ def test_agent_gate_reflects_the_phase():
 
     assert diagnose_agent.before_tool_callback(_Tool(), {}, None)["blocked"] is True
     assert verify_agent.before_tool_callback(_Tool(), {}, None) is None
+
+
+def test_agent_engine_app_is_pickleable_for_object_deploy():
+    app = build_adk_app()
+
+    restored = pickle.loads(pickle.dumps(app))
+
+    assert hasattr(restored, "async_stream_query")
+    assert hasattr(restored, "stream_query")
