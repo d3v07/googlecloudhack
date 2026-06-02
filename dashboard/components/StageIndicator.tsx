@@ -5,17 +5,26 @@ import styles from "./StageIndicator.module.css";
 /**
  * The five operator-facing stages: Detect -> Diagnose -> Test -> Approve -> Verify.
  * Completed stages show a check; the active stage pulses; a rejected pack marks
- * the Approve stage with an X.
+ * the Approve stage with an X. When `running` (a live agent run is in flight),
+ * the Diagnose stage pulses to show the agent is working.
  */
-export function StageIndicator({ status }: { status: PackStatus }) {
-  const active = activeStageIndex(status);
+export function StageIndicator({
+  status,
+  running = false,
+}: {
+  status: PackStatus;
+  running?: boolean;
+}) {
+  // While a run is in flight, show progress up to Diagnose (index 1); otherwise
+  // map from the pack's status.
+  const active = running ? 1 : activeStageIndex(status);
 
   return (
     <ol className={styles.track} aria-label="Pipeline stages">
       {STAGES.map((stage, i) => {
         const done = i < active;
         const isActive = i === active;
-        const rejectedHere = status === "rejected" && stage === "Approve";
+        const rejectedHere = !running && status === "rejected" && stage === "Approve";
 
         let state: "done" | "active" | "pending" | "rejected" = "pending";
         if (rejectedHere) state = "rejected";
