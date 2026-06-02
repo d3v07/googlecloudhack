@@ -29,6 +29,28 @@ class DecisionAction(StrEnum):
     DEFER = "defer"
 
 
+class AgentTraceStage(StrEnum):
+    DETECT = "detect"
+    DIAGNOSE = "diagnose"
+    CANDIDATE = "candidate"
+    RATIONALE = "rationale"
+    APPROVE = "approve"
+    APPLY = "apply"
+    VERIFY = "verify"
+
+
+class AgentTraceActor(StrEnum):
+    AGENT_ENGINE = "agent_engine"
+    DETERMINISTIC_CONTROLLER = "deterministic_controller"
+    HUMAN = "human"
+
+
+class AgentTraceStatus(StrEnum):
+    OK = "ok"
+    DRIFT = "drift"
+    FAILED = "failed"
+
+
 def _freeze(value: Any) -> Any:
     if isinstance(value, Mapping):
         return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
@@ -137,6 +159,17 @@ class PhaseTransition(BaseModel):
     note: str = ""
 
 
+class AgentTraceEvent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    stage: AgentTraceStage
+    actor: AgentTraceActor
+    status: AgentTraceStatus
+    summary: str = Field(min_length=1)
+    tool: str | None = None
+    ledger_ref: str | None = None
+
+
 class EvidencePack(BaseModel):
     """Versioned, dashboard-facing run record. THE contract #10 consumes — frozen at v1.
     Read it via the published JSON Schema + the read endpoint; never import this module."""
@@ -156,6 +189,7 @@ class EvidencePack(BaseModel):
     recommendation: Recommendation
     decision: Decision | None = None
     phase_log: tuple[PhaseTransition, ...] = ()
+    agent_trace: tuple[AgentTraceEvent, ...] = ()
     evidence_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
     created_at: str = Field(min_length=1)
 

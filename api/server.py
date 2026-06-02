@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from api.agent_engine import AgentEngineDiagnosisClient
 from api.routes import Engine, PackStore, get_engine, get_store, router
 from controller.ledger_store import LedgerStore, MongoLedgerStore
-from controller.orchestrator import DiagnosisAdvisor
+from controller.orchestrator import DiagnosisAgent
 from controller.persistence import load_pack, read_pack, save_pack, write_pack
 from controller.schemas import EvidencePack
 
@@ -65,11 +65,11 @@ class _LiveEngine:  # pragma: no cover - live
     def __init__(
         self,
         connection_string: str,
-        diagnosis_advisor: DiagnosisAdvisor | None = None,
+        diagnosis_agent: DiagnosisAgent | None = None,
         ledger: LedgerStore | None = None,
     ) -> None:
         self._conn = connection_string
-        self._diagnosis_advisor = diagnosis_advisor
+        self._diagnosis_agent = diagnosis_agent
         self._ledger = ledger
 
     def _backend(self):
@@ -80,7 +80,18 @@ class _LiveEngine:  # pragma: no cover - live
 
     async def diagnose(self, run_id: str) -> EvidencePack:
         from controller.demo_fixture import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
-        from controller.orchestrator import run_diagnosis
+        from controller.orchestrator import run_agent_diagnosis, run_diagnosis
+
+        if self._diagnosis_agent is not None:
+            return await run_agent_diagnosis(
+                self._diagnosis_agent,
+                run_id=run_id,
+                namespace=f"{DB}.{COLL}",
+                query_filter=QUERY_FILTER,
+                query_sort=QUERY_SORT,
+                limit=LIMIT,
+                ledger=self._ledger,
+            )
 
         backend = self._backend()
         try:
@@ -91,7 +102,6 @@ class _LiveEngine:  # pragma: no cover - live
                 query_filter=QUERY_FILTER,
                 query_sort=QUERY_SORT,
                 limit=LIMIT,
-                advisor=self._diagnosis_advisor,
                 ledger=self._ledger,
             )
         finally:

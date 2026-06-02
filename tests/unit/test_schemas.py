@@ -4,6 +4,10 @@ from pydantic import ValidationError
 from controller.ledger import evidence_hash
 from controller.phases import Phase
 from controller.schemas import (
+    AgentTraceActor,
+    AgentTraceEvent,
+    AgentTraceStage,
+    AgentTraceStatus,
     Decision,
     DecisionAction,
     Diagnosis,
@@ -139,6 +143,36 @@ def test_recommendation_rejects_empty_index_spec():
 def test_decision_rejects_invalid_hash():
     with pytest.raises(ValidationError):
         Decision(action=DecisionAction.APPROVE, evidence_hash="not-a-hash", phase=Phase.APPROVE)
+
+
+def test_agent_trace_event_validates_and_serializes():
+    event = AgentTraceEvent(
+        stage=AgentTraceStage.DETECT,
+        actor=AgentTraceActor.AGENT_ENGINE,
+        status=AgentTraceStatus.OK,
+        tool="explain_slow_query",
+        summary="Agent Engine captured slow-query evidence.",
+        ledger_ref="slow_queries/run-1:diagnose:slow_query",
+    )
+
+    assert event.model_dump(mode="json") == {
+        "stage": "detect",
+        "actor": "agent_engine",
+        "status": "ok",
+        "summary": "Agent Engine captured slow-query evidence.",
+        "tool": "explain_slow_query",
+        "ledger_ref": "slow_queries/run-1:diagnose:slow_query",
+    }
+
+
+def test_agent_trace_requires_summary():
+    with pytest.raises(ValidationError):
+        AgentTraceEvent(
+            stage=AgentTraceStage.DETECT,
+            actor=AgentTraceActor.AGENT_ENGINE,
+            status=AgentTraceStatus.OK,
+            summary="",
+        )
 
 
 def test_diagnosis_composes_finding_and_recommendation():

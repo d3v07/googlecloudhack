@@ -1,7 +1,7 @@
-"""Agent Engine diagnosis advisor used by the Cloud Run /run path.
+"""Agent Engine diagnosis client used by the Cloud Run /run path.
 
-The deployed agent is advisory only: it can propose/rationalize from observed evidence,
-but the deterministic controller recomputes the winner and evidence hash.
+The deployed agent performs read-only Mongo diagnosis with native tools. The Cloud Run
+controller still recomputes the ESR winner and evidence hash before emitting a pack.
 """
 
 from __future__ import annotations
@@ -11,8 +11,14 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from controller.orchestrator import DiagnosisAdvice
-from controller.schemas import Evidence
+from controller.orchestrator import AgentDiagnosisResult
+from controller.schemas import (
+    AgentTraceActor,
+    AgentTraceEvent,
+    AgentTraceStage,
+    AgentTraceStatus,
+    Evidence,
+)
 
 
 def _normalize_index_spec(value: Any) -> tuple[tuple[str, int], ...]:
@@ -44,19 +50,54 @@ def _first_json_object(text: str) -> dict[str, Any]:
     return {}
 
 
-def _event_text(event: Any) -> str:
+def _event_parts(event: Any) -> list[Any]:
     if isinstance(event, dict):
         content = event.get("content") or {}
         parts = content.get("parts") if isinstance(content, dict) else None
-        if isinstance(parts, list):
-            return "".join(str(part.get("text", "")) for part in parts if isinstance(part, dict))
-        return str(event.get("text", ""))
+        return parts if isinstance(parts, list) else []
 
     content = getattr(event, "content", None)
     parts = getattr(content, "parts", None) if content else None
-    if parts:
-        return "".join(str(getattr(part, "text", "")) for part in parts)
-    return str(getattr(event, "text", ""))
+    return list(parts) if parts else []
+
+
+def _part_text(part: Any) -> str:
+    if isinstance(part, dict):
+        return str(part.get("text", ""))
+    return str(getattr(part, "text", ""))
+
+
+def _part_function_response(part: Any) -> tuple[str, dict[str, Any]] | None:
+    response = part.get("function_response") if isinstance(part, dict) else None
+    if response is None and not isinstance(part, dict):
+        response = getattr(part, "function_response", None)
+    if response is None:
+        return None
+
+    name = response.get("name") if isinstance(response, dict) else getattr(response, "name", "")
+    payload = (
+        response.get("response")
+        if isinstance(response, dict)
+        else getattr(response, "response", None)
+    )
+    return (str(name), dict(payload)) if isinstance(payload, dict) else None
+
+
+def _event_text(event: Any) -> str:
+    if isinstance(event, dict) and not _event_parts(event):
+        return str(event.get("text", ""))
+    if not _event_parts(event):
+        return str(getattr(event, "text", ""))
+    return "".join(_part_text(part) for part in _event_parts(event))
+
+
+def _event_function_responses(event: Any) -> list[tuple[str, dict[str, Any]]]:
+    responses: list[tuple[str, dict[str, Any]]] = []
+    for part in _event_parts(event):
+        response = _part_function_response(part)
+        if response is not None:
+            responses.append(response)
+    return responses
 
 
 def _build_prompt(
@@ -66,42 +107,119 @@ def _build_prompt(
     query_filter: dict,
     query_sort: list[tuple[str, int]],
     limit: int,
-    before: Evidence,
 ) -> str:
-    metrics = before.metrics
     payload = {
         "run_id": run_id,
         "namespace": namespace,
         "query": {"filter": query_filter, "sort": query_sort, "limit": limit},
-        "observed": {
-            "stages": list(metrics.stages),
-            "docs_examined": metrics.docs_examined,
-            "docs_returned": metrics.docs_returned,
-            "total_keys_examined": metrics.total_keys_examined,
-            "has_blocking_sort": metrics.has_blocking_sort,
-        },
     }
     return (
-        "You are the DBRE Diagnose Agent. Review this MongoDB explain evidence and "
-        "recommend the ESR-correct index. Return compact JSON with keys "
-        "`recommended_index` as [[field, direction], ...] and `rationale` as one "
-        "short paragraph. Do not request or perform any database mutation.\n\n"
+        "You are the DBRE Diagnose Agent. Run the native Mongo diagnosis tools in this "
+        "order: explain_slow_query, compare_candidate_indexes, diagnose_candidate, "
+        "rationalize_recommendation. Return compact JSON with keys `before`, "
+        "`recommended_index`, `rationale`, and `tool_trace`. Do not perform any "
+        "database mutation.\n\n"
         f"{json.dumps(payload, sort_keys=True)}"
     )
 
 
-def _advice_from_text(resource_name: str, text: str) -> DiagnosisAdvice:
+def _trace_for_tool(name: str, payload: dict[str, Any]) -> AgentTraceEvent:
+    stage = {
+        "explain_slow_query": AgentTraceStage.DETECT,
+        "compare_candidate_indexes": AgentTraceStage.CANDIDATE,
+        "diagnose_candidate": AgentTraceStage.DIAGNOSE,
+        "rationalize_recommendation": AgentTraceStage.RATIONALE,
+    }.get(name, AgentTraceStage.DIAGNOSE)
+    summary = {
+        "explain_slow_query": "Agent Engine captured slow-query explain evidence.",
+        "compare_candidate_indexes": "Agent Engine compared candidate ESR indexes.",
+        "diagnose_candidate": "Agent Engine ran deterministic ESR diagnosis.",
+        "rationalize_recommendation": "Agent Engine produced an evidence-grounded rationale.",
+    }.get(name, f"Agent Engine ran {name}.")
+    if name == "compare_candidate_indexes" and payload.get("winner"):
+        summary = f"Agent Engine compared candidates and selected {payload['winner']}."
+    return AgentTraceEvent(
+        stage=stage,
+        actor=AgentTraceActor.AGENT_ENGINE,
+        status=AgentTraceStatus.OK,
+        tool=name,
+        summary=summary,
+    )
+
+
+def _response_by_name(
+    responses: list[tuple[str, dict[str, Any]]], name: str
+) -> dict[str, Any] | None:
+    for response_name, payload in reversed(responses):
+        if response_name == name:
+            return payload
+    return None
+
+
+def _before_from_payload(
+    parsed: dict[str, Any], responses: list[tuple[str, dict[str, Any]]]
+) -> Evidence:
+    explain = _response_by_name(responses, "explain_slow_query")
+    if explain and isinstance(explain.get("evidence"), dict):
+        return Evidence.model_validate(explain["evidence"])
+
+    diagnose_payload = _response_by_name(responses, "diagnose_candidate")
+    if diagnose_payload and isinstance(diagnose_payload.get("before"), dict):
+        return Evidence.model_validate(diagnose_payload["before"])
+
+    before = parsed.get("before") or parsed.get("evidence")
+    if isinstance(before, dict):
+        if isinstance(before.get("evidence"), dict):
+            before = before["evidence"]
+        return Evidence.model_validate(before)
+    raise ValueError("Agent Engine diagnosis did not return before evidence")
+
+
+def _proposed_index_from_payload(
+    parsed: dict[str, Any], responses: list[tuple[str, dict[str, Any]]]
+) -> tuple[tuple[str, int], ...]:
+    proposed = _normalize_index_spec(parsed.get("recommended_index") or parsed.get("index_spec"))
+    if proposed:
+        return proposed
+
+    rationale_payload = _response_by_name(responses, "rationalize_recommendation") or {}
+    proposed = _normalize_index_spec(rationale_payload.get("recommended_index"))
+    if proposed:
+        return proposed
+
+    diagnosis_payload = _response_by_name(responses, "diagnose_candidate") or {}
+    diagnosis = diagnosis_payload.get("diagnosis")
+    recommendation = diagnosis.get("recommendation") if isinstance(diagnosis, dict) else None
+    index_spec = recommendation.get("index_spec") if isinstance(recommendation, dict) else None
+    return _normalize_index_spec(index_spec)
+
+
+def _rationale_from_payload(
+    parsed: dict[str, Any], responses: list[tuple[str, dict[str, Any]]], text: str
+) -> str:
+    if parsed.get("rationale"):
+        return str(parsed["rationale"]).strip()
+    rationale_payload = _response_by_name(responses, "rationalize_recommendation") or {}
+    if rationale_payload.get("rationale"):
+        return str(rationale_payload["rationale"]).strip()
+    return text.strip()
+
+
+def _diagnosis_from_events(
+    resource_name: str, text: str, responses: list[tuple[str, dict[str, Any]]]
+) -> AgentDiagnosisResult:
     parsed = _first_json_object(text)
-    nested_recommendation = parsed.get("recommendation")
-    nested_index = (
-        nested_recommendation.get("index_spec") if isinstance(nested_recommendation, dict) else None
+    before = _before_from_payload(parsed, responses)
+    proposed_index = _proposed_index_from_payload(parsed, responses)
+    rationale = _rationale_from_payload(parsed, responses, text)
+    trace = tuple(_trace_for_tool(name, payload) for name, payload in responses)
+    return AgentDiagnosisResult(
+        source=resource_name,
+        before=before,
+        narrative=rationale,
+        proposed_index=proposed_index,
+        trace=trace,
     )
-    proposed = _normalize_index_spec(
-        parsed.get("recommended_index") or parsed.get("index_spec") or nested_index
-    )
-    rationale = str(parsed.get("rationale") or "").strip() if parsed else ""
-    narrative = rationale or text.strip()
-    return DiagnosisAdvice(source=resource_name, narrative=narrative, proposed_index=proposed)
 
 
 @dataclass(frozen=True)
@@ -121,7 +239,7 @@ class AgentEngineDiagnosisClient:
             location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
         )
 
-    async def advise(  # pragma: no cover - live Vertex AI I/O
+    async def diagnose(  # pragma: no cover - live Vertex AI I/O
         self,
         *,
         run_id: str,
@@ -129,8 +247,7 @@ class AgentEngineDiagnosisClient:
         query_filter: dict,
         query_sort: list[tuple[str, int]],
         limit: int,
-        before: Evidence,
-    ) -> DiagnosisAdvice:
+    ) -> AgentDiagnosisResult:
         import vertexai
 
         prompt = _build_prompt(
@@ -139,11 +256,12 @@ class AgentEngineDiagnosisClient:
             query_filter=query_filter,
             query_sort=query_sort,
             limit=limit,
-            before=before,
         )
         client = vertexai.Client(project=self.project, location=self.location)
         remote = client.agent_engines.get(name=self.resource_name)
         chunks: list[str] = []
+        responses: list[tuple[str, dict[str, Any]]] = []
         async for event in remote.async_stream_query(user_id=run_id, message=prompt):
             chunks.append(_event_text(event))
-        return _advice_from_text(self.resource_name, "".join(chunks))
+            responses.extend(_event_function_responses(event))
+        return _diagnosis_from_events(self.resource_name, "".join(chunks), responses)

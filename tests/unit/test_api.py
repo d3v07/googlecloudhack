@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from api.server import LocalFilePackStore, MongoPackStore, _EmptyPackStore, create_app
+from api.server import LocalFilePackStore, MongoPackStore, _EmptyPackStore, _LiveEngine, create_app
+from controller.orchestrator import AgentDiagnosisResult
 from controller.ledger import evidence_hash as compute_hash
 from controller.persistence import write_pack
 from controller.phases import Phase
@@ -361,6 +362,31 @@ def test_api_server_does_not_import_agents_layer() -> None:
     src = inspect.getsource(api.server)
     assert "from agents" not in src
     assert "import agents" not in src
+
+
+def test_live_engine_uses_agent_engine_before_local_backend_when_configured() -> None:
+    class _Agent:
+        async def diagnose(self, **kwargs) -> AgentDiagnosisResult:
+            return AgentDiagnosisResult(
+                source="agent-engine-test",
+                before=_minimal_pack("agent-run").before,
+                narrative="agent-led diagnosis",
+                proposed_index=(("storeLocation", 1), ("saleDate", -1), ("customer.age", 1)),
+            )
+
+    class _NoBackendEngine(_LiveEngine):
+        def _backend(self):
+            raise AssertionError("production /run must not pre-explain in Cloud Run")
+
+    engine = _NoBackendEngine("unused", diagnosis_agent=_Agent())
+
+    import asyncio
+
+    pack = asyncio.run(engine.diagnose("agent-run"))
+
+    assert pack.status is PackStatus.DIAGNOSED
+    assert pack.narrative == "agent-led diagnosis"
+    assert pack.agent_trace[-1].actor.value == "deterministic_controller"
 
 
 # --- save_pack store-level tests ---

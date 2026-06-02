@@ -62,6 +62,7 @@ def write_diagnosis_records(
     query_sort: list[tuple[str, int]],
     limit: int,
     current_index: str,
+    source: str = "deterministic_esr",
 ) -> None:
     if ledger is None:
         return
@@ -70,7 +71,7 @@ def write_diagnosis_records(
         SLOW_QUERIES,
         record_id(pack.run_id, "diagnose:slow_query"),
         _base(pack, phase="diagnose", event="slow_query")
-        | {"query": query, "evidence": _evidence(pack.before)},
+        | {"query": query, "evidence": _evidence(pack.before), "source": source},
     )
     ledger.upsert(
         CANDIDATES,
@@ -79,7 +80,7 @@ def write_diagnosis_records(
         | {
             "index_spec": _index_spec(pack.recommendation.index_spec),
             "rationale": pack.recommendation.rationale,
-            "source": "deterministic_esr",
+            "source": source,
             "selected": True,
         },
     )
@@ -91,6 +92,7 @@ def write_diagnosis_records(
             "hint": current_index,
             "outcome": _metrics(pack.before),
             "blocking_sort_detected": pack.before.metrics.has_blocking_sort,
+            "source": source,
         },
     )
     write_pack_record(ledger, pack)

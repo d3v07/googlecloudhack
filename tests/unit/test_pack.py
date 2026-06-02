@@ -121,3 +121,4 @@ def test_committed_example_validates_against_the_contract():
 def test_committed_schema_is_in_sync_with_the_model():
     assert json.loads(SCHEMA.read_text()) == EvidencePack.model_json_schema()
     assert "narrative" in EvidencePack.model_json_schema()["properties"]
+    assert "agent_trace" in EvidencePack.model_json_schema()["properties"]
