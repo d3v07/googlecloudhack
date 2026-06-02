@@ -1,4 +1,11 @@
-from agents.deploy import _REQUIREMENTS, _agent_env_vars, _resource_name, _staging_bucket
+from agents.deploy import (
+    _MAX_INSTANCES,
+    _MIN_INSTANCES,
+    _REQUIREMENTS,
+    _agent_env_vars,
+    _resource_name,
+    _staging_bucket,
+)
 
 
 def test_staging_bucket_default_and_override(monkeypatch):
@@ -65,3 +72,8 @@ def test_deploy_uses_packaging_create_api():
     source = inspect.getsource(deploy.deploy)
     assert "agent_engines.create(" in source
     assert "client.agent_engines.create" not in source
+
+
+def test_agent_engine_runtime_keeps_demo_instance_warm():
+    assert _MIN_INSTANCES == 1
+    assert _MAX_INSTANCES == 1

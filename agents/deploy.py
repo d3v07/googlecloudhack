@@ -24,6 +24,8 @@ _REQUIREMENTS = [
     "pymongo>=4.6",
     "cloudpickle>=3.0",
 ]
+_MIN_INSTANCES = 1
+_MAX_INSTANCES = 1
 
 
 def _staging_bucket(project: str) -> str:
@@ -74,8 +76,8 @@ def deploy() -> str:  # pragma: no cover - live deploy
         # the runtime (pip requirements alone don't include first-party code)
         extra_packages=["controller", "agents"],
         env_vars=env_vars,
-        min_instances=0,
-        max_instances=1,
+        min_instances=_MIN_INSTANCES,
+        max_instances=_MAX_INSTANCES,
     )
 
     resource_name = _resource_name(remote_agent)
