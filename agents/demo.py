@@ -17,7 +17,7 @@ from pathlib import Path
 from controller.backends import PymongoBackend
 from controller.narrate import Narrator
 from controller.orchestrator import run_remediation
-from controller.persistence import write_pack
+from controller.persistence import save_pack, write_pack
 from controller.schemas import EvidencePack
 
 DB = "sample_supplies"
@@ -25,6 +25,10 @@ COLL = "sales_agent_demo"
 QUERY_FILTER = {"storeLocation": "Denver", "customer.age": {"$gte": 30, "$lte": 50}}
 QUERY_SORT = [("saleDate", -1)]
 LIMIT = 20
+
+# the deployed read API (#31) reads packs from here — persist so the dashboard renders
+STATE_DB = "dbre_state"
+STATE_COLL = "evidence_packs"
 
 
 async def run_demo(
@@ -65,6 +69,15 @@ def main() -> None:  # pragma: no cover - live entrypoint
         raise SystemExit("no Mongo connection string (set MDB_MCP_CONNECTION_STRING)")
     pack = asyncio.run(run_demo(conn, narrator=GeminiNarrator()))
     path = write_pack(pack, Path("runs"))
+
+    from pymongo import MongoClient
+
+    client = MongoClient(conn)
+    try:
+        save_pack(client[STATE_DB][STATE_COLL], pack)
+    finally:
+        client.close()
+
     print(
         f"DEMO {pack.run_id} status={pack.status} severity={pack.finding.severity} "
         f"before_keys={pack.before.metrics.total_keys_examined} "
@@ -72,6 +85,7 @@ def main() -> None:  # pragma: no cover - live entrypoint
     )
     print(f"narrative: {pack.narrative[:240] if pack.narrative else None}")
     print(f"-> {path}")
+    print(f"-> mongo {STATE_DB}.{STATE_COLL} ({pack.run_id})")
 
 
 if __name__ == "__main__":  # pragma: no cover
