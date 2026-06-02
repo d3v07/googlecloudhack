@@ -83,15 +83,15 @@ uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
 ```
 
 Note: `-m agents.deploy` is required (not `python agents/deploy.py`). Script mode puts
-`agents/` on `sys.path`, not the repo root, which breaks the `agents.agent_engine_app:adk_app`
-entrypoint and the downstream `controller.*` imports. `-m` mode puts the repo root on `sys.path`, matching
-pytest's `pythonpath = ["."]` config.
+`agents/` on `sys.path`, not the repo root, which breaks downstream `agents.*` and
+`controller.*` imports. `-m` mode puts the repo root on `sys.path`, matching pytest's
+`pythonpath = ["."]` config.
 
-The deploy uses Agent Engine source packages, not a pickled in-memory object:
+The deploy uses the official ADK object deploy path:
 
-- source packages: `agents/`, `controller/`
-- entrypoint: `agents.agent_engine_app:adk_app`
-- requirements file: `agents/agent_engine_requirements.txt`
+- deployed object: `vertexai.agent_engines.AdkApp(agent=build_agent(...))`
+- extra packages: `controller/`, `agents/`
+- requirements: runtime package list in `agents/deploy.py`
 - runtime identity: Agent Identity, with `MONGODB_TARGET_URI` injected from Secret Manager
 - runtime env: non-reserved `GCRAH_AGENT_PROJECT` / `GCRAH_AGENT_LOCATION` seed
   the ADK app initialization; Google-reserved `GOOGLE_CLOUD_PROJECT` is not set by the deploy script

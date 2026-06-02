@@ -14,9 +14,6 @@ importable in CI without the aiplatform package installed.
 
 import argparse
 import os
-from typing import Any
-
-from google.protobuf import json_format
 
 from agents.agent_engine_factory import build_adk_app
 
@@ -27,12 +24,9 @@ _REQUIREMENTS = [
     "pymongo>=4.6",
     "cloudpickle>=3.0",
 ]
-_REQUIREMENTS_FILE = "agents/agent_engine_requirements.txt"
 _MIN_INSTANCES = 1
 _MAX_INSTANCES = 1
-_SOURCE_PACKAGES = ("agents", "controller")
-_ENTRYPOINT_MODULE = "agents.agent_engine_app"
-_ENTRYPOINT_OBJECT = "adk_app"
+_EXTRA_PACKAGES = ("controller", "agents")
 
 
 def _staging_bucket(project: str) -> str:
@@ -62,21 +56,6 @@ def _agent_env_vars(
     }
 
 
-def _class_methods_for_source_deploy(
-    project: str | None = None,
-    location: str | None = None,
-) -> list[dict[str, Any]]:
-    from vertexai.agent_engines import _agent_engines
-
-    app = build_adk_app(project, location)
-    operations = _agent_engines._get_registered_operations(app)
-    methods = _agent_engines._generate_class_methods_spec_or_raise(
-        agent_engine=app,
-        operations=operations,
-    )
-    return [json_format.MessageToDict(method) for method in methods]
-
-
 def deploy() -> str:  # pragma: no cover - live deploy
     import vertexai
     from vertexai import types as vertexai_types
@@ -91,24 +70,22 @@ def deploy() -> str:  # pragma: no cover - live deploy
     print(f"STAGING_BUCKET={staging_bucket}")
     print(f"MONGO_SECRET_NAME={env_vars['MONGODB_TARGET_URI']['secret']}")
 
+    app = build_adk_app(project, location)
     client = vertexai.Client(project=project, location=location)
     remote_agent = client.agent_engines.create(
+        agent=app,
         config={
             "display_name": "GCRAH DBRE Agent",
             "description": "Evidence-driven MongoDB performance engineer — ESR index diagnosis.",
-            "source_packages": list(_SOURCE_PACKAGES),
-            "entrypoint_module": _ENTRYPOINT_MODULE,
-            "entrypoint_object": _ENTRYPOINT_OBJECT,
-            "requirements_file": _REQUIREMENTS_FILE,
-            "class_methods": _class_methods_for_source_deploy(project, location),
+            "requirements": _REQUIREMENTS,
+            "extra_packages": list(_EXTRA_PACKAGES),
             "agent_framework": "google-adk",
-            "python_version": "3.12",
             "staging_bucket": staging_bucket,
             "env_vars": env_vars,
             "identity_type": vertexai_types.IdentityType.AGENT_IDENTITY,
             "min_instances": _MIN_INSTANCES,
             "max_instances": _MAX_INSTANCES,
-        }
+        },
     )
 
     resource_name = _resource_name(remote_agent)
