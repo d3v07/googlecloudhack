@@ -39,6 +39,8 @@ Required roles (already granted per spike):
 
 - `roles/aiplatform.admin` on the project
 - `roles/storage.admin` on `gs://performer-497915-agent-engine-staging`
+- `roles/secretmanager.secretAccessor` on the Mongo connection secret for the deployed
+  Agent Engine identity
 
 ### Staging Bucket
 
@@ -56,7 +58,8 @@ GOOGLE_CLOUD_PROJECT=performer-497915
 GOOGLE_CLOUD_LOCATION=us-central1
 GEMINI_MODEL=gemini-2.5-flash
 GOOGLE_CLOUD_STAGING_BUCKET=gs://performer-497915-agent-engine-staging
-# MONGO_URI only needed if smoke-testing MCP path locally
+MONGO_SECRET_NAME=mongodb-connection-string
+# MONGODB_TARGET_URI is injected into Agent Engine from Secret Manager, not stored here.
 ```
 
 ## Deploy
@@ -90,6 +93,7 @@ Expected output:
 PROJECT=performer-497915
 LOCATION=us-central1
 STAGING_BUCKET=gs://performer-497915-agent-engine-staging
+MONGO_SECRET_NAME=mongodb-connection-string
 ENGINE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<id>
 ```
 
@@ -97,38 +101,25 @@ Save the `ENGINE_RESOURCE` value — it is the stable resource name for all subs
 
 ## Smoke Test
 
-After deploy completes, send one remote query to confirm the engine is callable:
+After deploy completes, send one remote query to confirm the engine is callable and can
+run the native Mongo diagnosis tools:
 
-```python
-import vertexai
-from vertexai import agent_engines
-
-client = vertexai.Client(project="performer-497915", location="us-central1")
-remote = client.agent_engines.get(name="<ENGINE_RESOURCE>")
-
-import asyncio
-
-async def ping():
-    events = remote.async_stream_query(
-        user_id="smoke-test",
-        message="You have no tools to call. Reply: deploy-ok",
-    )
-    async for event in events:
-        content = getattr(event, "content", None)
-        parts = getattr(content, "parts", None) if content else None
-        if parts:
-            for p in parts:
-                print(getattr(p, "text", ""))
-
-asyncio.run(ping())
+```bash
+uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
+       --with google-adk \
+       --with python-dotenv \
+       python -m agents.deploy smoke \
+         --name "projects/782567466199/locations/us-central1/reasoningEngines/<id>"
 ```
 
-Expect: a text reply confirming the engine responds.
+Expect: streamed output mentioning the read-only native tools, the B-vs-C metrics, and
+the ESR index C recommendation.
 
-## MCP Toolset — Deferred
+## MCP Toolset — Local Only
 
-`build_agent()` deploys with only the `diagnose_index` FunctionTool. The MongoDB MCP toolset
-(`build_mcp_toolset()`) is **not attached** for this deploy.
+`build_agent()` deploys with Python-native Mongo FunctionTools plus the deterministic
+`diagnose_index` FunctionTool. The MongoDB MCP toolset (`build_mcp_toolset()`) is **not
+attached** for this deploy.
 
 **Why:** the MCP toolset spawns `npx -y mongodb-mcp-server` over stdio at tool-call time.
 Agent Engine's managed runtime is a Python-only container — there is no Node/npx in the image.
@@ -143,9 +134,9 @@ which is worse.
    operations — keeps everything Python.
 3. Build a custom Agent Engine container image that bundles Node, enabling npx at runtime.
 
-For the shipped demo, Cloud Run captures live Mongo evidence with Python and calls this
-Agent Engine resource for diagnosis/rationale. The deterministic controller validates
-the ESR winner, hash, phase gate, apply, verification, and ledger writes.
+For the shipped demo, Agent Engine performs the read-only diagnosis/rationale with
+Python-native Mongo tools. The deterministic controller validates the ESR winner, hash,
+phase gate, apply, verification, and ledger writes.
 
 ## Cost Notes
 

@@ -1,4 +1,4 @@
-from agents.deploy import _REQUIREMENTS, _resource_name, _staging_bucket
+from agents.deploy import _REQUIREMENTS, _agent_env_vars, _resource_name, _staging_bucket
 
 
 def test_staging_bucket_default_and_override(monkeypatch):
@@ -31,3 +31,16 @@ def test_agent_engine_requirements_do_not_request_conflicting_adk_extra():
     assert "google-cloud-aiplatform[agent_engines]>=1.112" in _REQUIREMENTS
     assert all("[agent_engines,adk]" not in requirement for requirement in _REQUIREMENTS)
     assert "google-adk>=2.1.0" in _REQUIREMENTS
+    assert "pymongo>=4.6" in _REQUIREMENTS
+    assert "mcp" not in _REQUIREMENTS
+
+
+def test_agent_env_vars_use_secret_manager_reference(monkeypatch):
+    monkeypatch.setenv("MONGO_SECRET_NAME", "mongo-uri")
+    monkeypatch.setenv("MONGO_SECRET_VERSION", "3")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3-flash")
+
+    env_vars = _agent_env_vars()
+
+    assert env_vars["MONGODB_TARGET_URI"] == {"secret": "mongo-uri", "version": "3"}
+    assert env_vars["GEMINI_MODEL"] == "gemini-3-flash"
