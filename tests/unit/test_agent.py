@@ -6,6 +6,10 @@ def test_agent_builds_with_diagnose_tool_and_a_gate():
     agent = build_agent(Phase.DIAGNOSE)
 
     tool_names = [getattr(tool, "name", None) for tool in agent.tools]
+    assert "explain_slow_query" in tool_names
+    assert "compare_candidate_indexes" in tool_names
+    assert "diagnose_candidate" in tool_names
+    assert "rationalize_recommendation" in tool_names
     assert "diagnose_index" in tool_names
     assert callable(agent.before_tool_callback)
     assert agent.name == "dbre_agent"
