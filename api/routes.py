@@ -5,8 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from controller.phases import Phase, assert_phase_transition
-from controller.schemas import Decision, DecisionAction, EvidencePack, PackStatus
+from controller.schemas import EvidencePack, PackStatus
 
 router = APIRouter()
 
@@ -17,15 +16,25 @@ class PackStore(Protocol):
     def save_pack(self, pack: EvidencePack) -> None: ...
 
 
-class ApprovalRequest(BaseModel):
-    evidence_hash: str
+class Engine(Protocol):
+    """Executes the remediation phases against the live target. diagnose() is read-only;
+    apply_and_verify() performs the human-approved index mutation; reject() is a no-op record."""
+
+    async def diagnose(self, run_id: str) -> EvidencePack: ...
+    async def apply_and_verify(self, pack: EvidencePack) -> EvidencePack: ...
+    def reject(self, pack: EvidencePack) -> EvidencePack: ...
 
 
 def get_store() -> PackStore:
     raise NotImplementedError("store not configured")
 
 
+def get_engine() -> Engine:
+    raise NotImplementedError("engine not configured")
+
+
 StoreDep = Annotated[PackStore, Depends(get_store)]
+EngineDep = Annotated[Engine, Depends(get_engine)]
 
 
 @router.get("/health")
@@ -46,35 +55,20 @@ def get_pack(run_id: str, store: StoreDep) -> dict:
     return pack.model_dump(mode="json")
 
 
-def _apply_decision(
-    run_id: str, action: DecisionAction, body: ApprovalRequest, store: PackStore
-) -> dict:
-    pack = store.get_pack(run_id)
-    if pack is None:
-        raise HTTPException(status_code=404, detail=f"pack '{run_id}' not found")
-    if pack.status != PackStatus.DIAGNOSED:
-        raise HTTPException(status_code=409, detail=f"pack is already in status '{pack.status}'")
-    if body.evidence_hash != pack.evidence_hash:
-        raise HTTPException(status_code=409, detail="evidence_hash mismatch")
-
-    assert_phase_transition(Phase.DIAGNOSE, Phase.APPROVE)
-    decision = Decision(action=action, evidence_hash=pack.evidence_hash, phase=Phase.APPROVE)
-    new_status = PackStatus.APPROVED if action == DecisionAction.APPROVE else PackStatus.REJECTED
-    updated = EvidencePack.model_validate(
-        {**pack.model_dump(mode="python"), "status": new_status, "decision": decision}
-    )
-    store.save_pack(updated)
-    return updated.model_dump(mode="json")
+class RunRequest(BaseModel):
+    run_id: str | None = None
 
 
-@router.post("/packs/{run_id}/approve")
-def approve_pack(run_id: str, body: ApprovalRequest, store: StoreDep) -> dict:
-    return _apply_decision(run_id, DecisionAction.APPROVE, body, store)
-
-
-@router.post("/packs/{run_id}/reject")
-def reject_pack(run_id: str, body: ApprovalRequest, store: StoreDep) -> dict:
-    return _apply_decision(run_id, DecisionAction.REJECT, body, store)
+@router.post("/run")
+async def trigger_run(store: StoreDep, engine: EngineDep, body: RunRequest | None = None) -> dict:
+    """Trigger a DIAGNOSE-only live run over the preset demo fixture (#37). Returns a
+    DIAGNOSED pack — NO database mutation happens here. The recommended index is applied only
+    after a human approves via POST /packs/{run_id}/decision. Synchronous (a few seconds,
+    longer on a cold start); pass {"run_id": "..."} only to pin the id."""
+    run_id = (body.run_id if body else None) or f"run-{uuid4().hex[:8]}"
+    pack = await engine.diagnose(run_id)
+    store.save_pack(pack)
+    return pack.model_dump(mode="json")
 
 
 class DecisionRequest(BaseModel):
@@ -85,14 +79,15 @@ class DecisionRequest(BaseModel):
 
 
 @router.post("/packs/{run_id}/decision")
-def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep):
-    """Single approve/reject endpoint the dashboard (#26) calls. Returns the updated
-    pack on success; 404 not_found / 409 stale_evidence_hash | already_decided otherwise.
-    `approver`/`note` are accepted for the audit trail (not yet persisted on Decision)."""
+async def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep, engine: EngineDep):
+    """The dashboard's approve/reject endpoint. On approve the recommended index is applied
+    and the fix verified (the human-gated mutation); on reject the decision is recorded with
+    no mutation. Returns the updated pack; 404 not_found / 409 already_decided |
+    stale_evidence_hash otherwise. `approver`/`note` are accepted for the audit trail."""
     pack = store.get_pack(run_id)
     if pack is None:
         return JSONResponse(status_code=404, content={"error": "not_found"})
-    if pack.status != PackStatus.DIAGNOSED:
+    if pack.decision is not None or pack.status is not PackStatus.DIAGNOSED:
         return JSONResponse(
             status_code=409, content={"error": "already_decided", "status": pack.status.value}
         )
@@ -101,32 +96,9 @@ def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep):
             status_code=409,
             content={"error": "stale_evidence_hash", "current_hash": pack.evidence_hash},
         )
-    action = DecisionAction.APPROVE if body.decision == "approve" else DecisionAction.REJECT
-    return _apply_decision(run_id, action, ApprovalRequest(evidence_hash=body.evidence_hash), store)
-
-
-class RunRequest(BaseModel):
-    run_id: str | None = None
-
-
-class Runner(Protocol):
-    async def run(self, run_id: str) -> EvidencePack: ...
-
-
-def get_runner() -> Runner:
-    raise NotImplementedError("runner not configured")
-
-
-RunnerDep = Annotated[Runner, Depends(get_runner)]
-
-
-@router.post("/run")
-async def trigger_run(store: StoreDep, runner: RunnerDep, body: RunRequest | None = None) -> dict:
-    """Trigger a live agent run over the preset demo fixture (#37): runs the deterministic
-    DIAGNOSE→VERIFY orchestrator, persists the resulting pack, and returns it. Synchronous —
-    the live index build makes this a few-seconds call (longer on a cold start). `narrative`
-    may be absent. No request body is needed; pass {"run_id": "..."} only to pin the id."""
-    run_id = (body.run_id if body else None) or f"run-{uuid4().hex[:8]}"
-    pack = await runner.run(run_id)
-    store.save_pack(pack)
-    return pack.model_dump(mode="json")
+    if body.decision == "approve":
+        updated = await engine.apply_and_verify(pack)
+    else:
+        updated = engine.reject(pack)
+    store.save_pack(updated)
+    return updated.model_dump(mode="json")

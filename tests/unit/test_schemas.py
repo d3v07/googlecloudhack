@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from controller.ledger import evidence_hash
 from controller.phases import Phase
 from controller.schemas import (
     Decision,
@@ -8,7 +9,9 @@ from controller.schemas import (
     Diagnosis,
     Evidence,
     EvidenceMetrics,
+    EvidencePack,
     Finding,
+    PackStatus,
     Recommendation,
     Severity,
 )
@@ -146,3 +149,86 @@ def test_diagnosis_composes_finding_and_recommendation():
 
     assert diagnosis.finding.severity is Severity.HIGH
     assert diagnosis.recommendation.index_spec == (("a", 1),)
+
+
+# --- EvidencePack status ⟺ (decision, after) consistency (#4) ---
+
+
+def _pack_parts():
+    before = Evidence(
+        query={"x": 1},
+        explain_plan={"stage": "IXSCAN"},
+        metrics=EvidenceMetrics(
+            docs_examined=1, docs_returned=1, millis=0, total_keys_examined=1, stages=("IXSCAN",)
+        ),
+    )
+    rec = Recommendation(index_spec=(("x", 1),), rationale="t")
+    finding = Finding(problem="p", severity=Severity.LOW, evidence_refs=("x",))
+    eh = evidence_hash({"evidence": before, "recommendation": rec})
+    base = {
+        "run_id": "r1",
+        "namespace": "db.coll",
+        "before": before,
+        "finding": finding,
+        "recommendation": rec,
+        "evidence_hash": eh,
+        "created_at": "2026-06-01T00:00:00Z",
+    }
+    return base, before, eh
+
+
+def _approve(eh: str) -> Decision:
+    return Decision(action=DecisionAction.APPROVE, evidence_hash=eh, phase=Phase.APPROVE)
+
+
+def _reject(eh: str) -> Decision:
+    return Decision(action=DecisionAction.REJECT, evidence_hash=eh, phase=Phase.APPROVE)
+
+
+def test_diagnosed_pack_with_decision_is_rejected():
+    base, _, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="DIAGNOSED"):
+        EvidencePack(**base, status=PackStatus.DIAGNOSED, decision=_approve(eh))
+
+
+def test_diagnosed_pack_with_after_is_rejected():
+    base, before, _ = _pack_parts()
+    with pytest.raises(ValidationError, match="DIAGNOSED"):
+        EvidencePack(**base, status=PackStatus.DIAGNOSED, after=before)
+
+
+def test_rejected_pack_without_decision_is_rejected():
+    base, _, _ = _pack_parts()
+    with pytest.raises(ValidationError, match="REJECTED"):
+        EvidencePack(**base, status=PackStatus.REJECTED)
+
+
+def test_rejected_pack_with_approve_decision_is_rejected():
+    base, _, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="REJECTED"):
+        EvidencePack(**base, status=PackStatus.REJECTED, decision=_approve(eh))
+
+
+def test_rejected_pack_with_after_is_rejected():
+    base, before, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="after-evidence"):
+        EvidencePack(**base, status=PackStatus.REJECTED, after=before, decision=_reject(eh))
+
+
+def test_approved_pack_without_decision_is_rejected():
+    base, before, _ = _pack_parts()
+    with pytest.raises(ValidationError, match="approve decision"):
+        EvidencePack(**base, status=PackStatus.APPROVED, after=before)
+
+
+def test_verified_pack_without_after_is_rejected():
+    base, _, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="after-evidence"):
+        EvidencePack(**base, status=PackStatus.VERIFIED, decision=_approve(eh))
+
+
+def test_valid_lifecycle_states_are_accepted():
+    base, before, eh = _pack_parts()
+    EvidencePack(**base, status=PackStatus.DIAGNOSED)
+    EvidencePack(**base, status=PackStatus.REJECTED, decision=_reject(eh))
+    EvidencePack(**base, status=PackStatus.VERIFIED, after=before, decision=_approve(eh))

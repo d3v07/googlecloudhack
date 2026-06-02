@@ -1,11 +1,10 @@
-import asyncio
 import os
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
 
-from api.routes import PackStore, Runner, get_runner, get_store, router
+from api.routes import Engine, PackStore, get_engine, get_store, router
 from controller.persistence import load_pack, read_pack, save_pack, write_pack
 from controller.schemas import EvidencePack
 
@@ -51,44 +50,60 @@ class _EmptyPackStore:
         raise NotImplementedError("_EmptyPackStore cannot persist packs")
 
 
-class _LiveRunner:  # pragma: no cover - live
-    """Runs the deterministic orchestrator over the preset demo fixture for POST /run.
-
-    Holds the connection string + a serialization lock; the Mongo connection and the
-    orchestrator imports are deferred to run() so constructing it at create_app() does no
-    I/O and can't regress the read endpoints. Imports stay within controller/ (packaged in
-    the read-API image) — never the agents/ layer. Narrator is intentionally off (the pack
-    stays deterministic; narration would need Vertex IAM on the Cloud Run SA)."""
+class _LiveEngine:  # pragma: no cover - live
+    """Runs the remediation phases over the preset demo fixture against the live target
+    collection. diagnose() is read-only; apply_and_verify() performs the human-approved
+    index mutation; reject() is a pure record. The Mongo connection + orchestrator imports
+    are deferred to call time so constructing it at create_app() does no I/O and can't
+    regress the read endpoints. Imports stay within controller/ (packaged in the read-API
+    image) — never the agents/ layer. Narrator is off (the pack stays deterministic;
+    narration would need Vertex IAM on the Cloud Run SA)."""
 
     def __init__(self, connection_string: str) -> None:
         self._conn = connection_string
-        # serialize live runs within the instance — the deploy pins Cloud Run to
-        # max-instances=1 so this in-process lock fully serializes /run, which lets the
-        # pre-run sweep reclaim orphans without ever dropping a peer's in-flight scratch
-        self._lock = asyncio.Lock()
 
-    async def run(self, run_id: str) -> EvidencePack:
+    def _backend(self):
         from controller.backends import PymongoBackend
+        from controller.demo_fixture import COLL, DB
+
+        return PymongoBackend(self._conn, DB, COLL)
+
+    async def diagnose(self, run_id: str) -> EvidencePack:
         from controller.demo_fixture import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
-        from controller.orchestrator import INDEX_C_NAME, run_remediation
+        from controller.orchestrator import run_diagnosis
 
-        async with self._lock:
-            backend = PymongoBackend(self._conn, DB, COLL)
-            try:
-                await backend.drop_scratch_indexes(f"{INDEX_C_NAME}__scratch__")
-                return await run_remediation(
-                    backend,
-                    run_id=run_id,
-                    namespace=f"{DB}.{COLL}",
-                    query_filter=QUERY_FILTER,
-                    query_sort=QUERY_SORT,
-                    limit=LIMIT,
-                )
-            finally:
-                backend.close()
+        backend = self._backend()
+        try:
+            return await run_diagnosis(
+                backend,
+                run_id=run_id,
+                namespace=f"{DB}.{COLL}",
+                query_filter=QUERY_FILTER,
+                query_sort=QUERY_SORT,
+                limit=LIMIT,
+            )
+        finally:
+            backend.close()
+
+    async def apply_and_verify(self, pack: EvidencePack) -> EvidencePack:
+        from controller.demo_fixture import LIMIT, QUERY_FILTER, QUERY_SORT
+        from controller.orchestrator import apply_and_verify
+
+        backend = self._backend()
+        try:
+            return await apply_and_verify(
+                backend, pack, query_filter=QUERY_FILTER, query_sort=QUERY_SORT, limit=LIMIT
+            )
+        finally:
+            backend.close()
+
+    def reject(self, pack: EvidencePack) -> EvidencePack:
+        from controller.orchestrator import reject_pack
+
+        return reject_pack(pack)
 
 
-def create_app(store: PackStore | None = None, runner: Runner | None = None) -> FastAPI:
+def create_app(store: PackStore | None = None, engine: Engine | None = None) -> FastAPI:
     app = FastAPI(title="GCRAH Evidence Pack API")
 
     if store is None:
@@ -100,15 +115,15 @@ def create_app(store: PackStore | None = None, runner: Runner | None = None) -> 
             conn = get_mongo_connection_string()
             collection = MongoClient(conn)["dbre_state"]["evidence_packs"]
             store = MongoPackStore(collection)
-            if runner is None:
-                runner = _LiveRunner(conn)
+            if engine is None:
+                engine = _LiveEngine(conn)
         else:
             packs_dir = Path(os.getenv("PACKS_DIR", "runs"))
             store = LocalFilePackStore(packs_dir) if packs_dir.exists() else _EmptyPackStore()
 
     app.dependency_overrides[get_store] = lambda: store
-    if runner is not None:
-        app.dependency_overrides[get_runner] = lambda: runner
+    if engine is not None:
+        app.dependency_overrides[get_engine] = lambda: engine
     app.include_router(router)
     return app
 

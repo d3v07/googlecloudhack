@@ -20,40 +20,33 @@ class _FakeNarrator:
         return "Blocking sort under index B; the ESR-correct index C removes it."
 
 
-def test_run_demo_catches_trap_fixes_it_and_narrates():
-    # before: hinted to B -> blocking SORT (17209 keys); after: C -> no sort (64 keys)
-    backend = FakeBackend(
-        [
-            _evidence(("FETCH", "SORT", "IXSCAN"), 17209),
-            _evidence(("LIMIT", "FETCH", "IXSCAN"), 64),
-        ]
-    )
+def test_run_demo_catches_trap_recommends_C_and_narrates():
+    # before hinted to B -> blocking SORT (17209 keys); DIAGNOSE-only, no mutation, awaits approval
+    backend = FakeBackend([_evidence(("FETCH", "SORT", "IXSCAN"), 17209)])
 
     pack = asyncio.run(
         run_demo(backend=backend, narrator=_FakeNarrator(), created_at="2026-06-02T00:00:00Z")
     )
 
-    assert pack.status is PackStatus.VERIFIED
+    assert pack.status is PackStatus.DIAGNOSED
+    assert pack.decision is None
+    assert pack.after is None
     assert pack.finding.severity is Severity.HIGH
-    assert pack.before.metrics.total_keys_examined > pack.after.metrics.total_keys_examined
     assert pack.recommendation.index_spec == (
         ("storeLocation", 1),
         ("saleDate", -1),
         ("customer.age", 1),
     )
     assert pack.narrative and "C" in pack.narrative
-    assert backend.dropped_indexes  # the scratch index was cleaned up
+    # DIAGNOSE is read-only — no index applied or dropped
+    assert backend.applied_indexes == []
+    assert backend.dropped_indexes == []
 
 
 def test_run_demo_without_narrator_leaves_narrative_none():
-    backend = FakeBackend(
-        [
-            _evidence(("FETCH", "SORT", "IXSCAN"), 17209),
-            _evidence(("LIMIT", "FETCH", "IXSCAN"), 64),
-        ]
-    )
+    backend = FakeBackend([_evidence(("FETCH", "SORT", "IXSCAN"), 17209)])
 
     pack = asyncio.run(run_demo(backend=backend, created_at="2026-06-02T00:00:00Z"))
 
     assert pack.narrative is None
-    assert pack.status is PackStatus.VERIFIED
+    assert pack.status is PackStatus.DIAGNOSED

@@ -166,3 +166,24 @@ class EvidencePack(BaseModel):
         if self.decision is not None and self.decision.evidence_hash != self.evidence_hash:
             raise ValueError("decision.evidence_hash must equal the pack's evidence_hash")
         return self
+
+    @model_validator(mode="after")
+    def _status_matches_decision_and_after(self) -> "EvidencePack":
+        # status ⟺ (decision, after) must be internally consistent, so an impossible
+        # pack (e.g. DIAGNOSED but already carrying a decision) can't slip past the
+        # "already decided" guard and be decided a second time
+        decided = self.decision is not None
+        if self.status is PackStatus.DIAGNOSED:
+            if decided or self.after is not None:
+                raise ValueError("DIAGNOSED pack must have no decision and no after-evidence")
+        elif self.status is PackStatus.REJECTED:
+            if not decided or self.decision.action is not DecisionAction.REJECT:
+                raise ValueError("REJECTED pack must carry a reject decision")
+            if self.after is not None:
+                raise ValueError("REJECTED pack must have no after-evidence")
+        else:  # APPROVED | VERIFIED — applied, so an approve decision + after-evidence
+            if not decided or self.decision.action is not DecisionAction.APPROVE:
+                raise ValueError(f"{self.status.value} pack must carry an approve decision")
+            if self.after is None:
+                raise ValueError(f"{self.status.value} pack must have after-evidence")
+        return self
