@@ -370,3 +370,50 @@ def test_create_app_uses_empty_store_when_no_mongo_secret_and_no_dir(monkeypatch
     app = create_app()
     with TestClient(app) as c:
         assert c.get("/packs").json() == []
+
+
+# --- POST /run route (#37 live-run trigger) ---
+
+class FakeRunner:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def run(self, run_id: str) -> EvidencePack:
+        self.calls.append(run_id)
+        return _minimal_pack(run_id, PackStatus.VERIFIED)
+
+
+def test_run_with_explicit_run_id_persists_and_returns() -> None:
+    store, runner = FakePackStore([]), FakeRunner()
+    client = TestClient(create_app(store, runner))
+    resp = client.post("/run", json={"run_id": "run-fixed"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["run_id"] == "run-fixed"
+    assert data["status"] == PackStatus.VERIFIED.value
+    assert runner.calls == ["run-fixed"]
+    assert store.get_pack("run-fixed") is not None
+
+
+def test_run_generates_run_id_when_no_body() -> None:
+    store, runner = FakePackStore([]), FakeRunner()
+    client = TestClient(create_app(store, runner))
+    resp = client.post("/run")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["run_id"].startswith("run-")
+    assert runner.calls == [data["run_id"]]
+    assert store.get_pack(data["run_id"]) is not None
+
+
+def test_run_returned_pack_validates_as_evidence_pack() -> None:
+    client = TestClient(create_app(FakePackStore([]), FakeRunner()))
+    resp = client.post("/run", json={})
+    assert resp.status_code == 200
+    EvidencePack.model_validate(resp.json())
+
+
+def test_get_runner_raises_when_not_overridden() -> None:
+    from api.routes import get_runner
+    with pytest.raises(NotImplementedError):
+        get_runner()

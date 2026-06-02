@@ -1,4 +1,5 @@
 from typing import Annotated, Literal, Protocol
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -102,3 +103,30 @@ def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep):
         )
     action = DecisionAction.APPROVE if body.decision == "approve" else DecisionAction.REJECT
     return _apply_decision(run_id, action, ApprovalRequest(evidence_hash=body.evidence_hash), store)
+
+
+class RunRequest(BaseModel):
+    run_id: str | None = None
+
+
+class Runner(Protocol):
+    async def run(self, run_id: str) -> EvidencePack: ...
+
+
+def get_runner() -> Runner:
+    raise NotImplementedError("runner not configured")
+
+
+RunnerDep = Annotated[Runner, Depends(get_runner)]
+
+
+@router.post("/run")
+async def trigger_run(store: StoreDep, runner: RunnerDep, body: RunRequest | None = None) -> dict:
+    """Trigger a live agent run over the preset demo fixture (#37): runs the deterministic
+    DIAGNOSE→VERIFY orchestrator, persists the resulting pack, and returns it. Synchronous —
+    the live index build makes this a few-seconds call (longer on a cold start). `narrative`
+    may be absent. No request body is needed; pass {"run_id": "..."} only to pin the id."""
+    run_id = (body.run_id if body else None) or f"run-{uuid4().hex[:8]}"
+    pack = await runner.run(run_id)
+    store.save_pack(pack)
+    return pack.model_dump(mode="json")
