@@ -1,8 +1,13 @@
 from agents.deploy import (
+    _ENTRYPOINT_MODULE,
+    _ENTRYPOINT_OBJECT,
     _MAX_INSTANCES,
     _MIN_INSTANCES,
     _REQUIREMENTS,
+    _REQUIREMENTS_FILE,
+    _SOURCE_PACKAGES,
     _agent_env_vars,
+    _class_methods_for_source_deploy,
     _resource_name,
     _staging_bucket,
 )
@@ -53,6 +58,15 @@ def test_agent_engine_requirements_do_not_request_conflicting_adk_extra():
     assert "mcp" not in _REQUIREMENTS
 
 
+def test_agent_engine_source_requirements_match_runtime_list():
+    with open(_REQUIREMENTS_FILE, encoding="utf-8") as requirements_file:
+        source_requirements = [
+            line.strip() for line in requirements_file if line.strip() and not line.startswith("#")
+        ]
+
+    assert source_requirements == _REQUIREMENTS
+
+
 def test_agent_env_vars_use_secret_manager_reference(monkeypatch):
     monkeypatch.setenv("MONGO_SECRET_NAME", "mongo-uri")
     monkeypatch.setenv("MONGO_SECRET_VERSION", "3")
@@ -64,16 +78,32 @@ def test_agent_env_vars_use_secret_manager_reference(monkeypatch):
     assert env_vars["GEMINI_MODEL"] == "gemini-3-flash"
 
 
-def test_deploy_uses_packaging_create_api():
+def test_deploy_uses_source_code_api():
     import inspect
 
     from agents import deploy
 
     source = inspect.getsource(deploy.deploy)
-    assert "agent_engines.create(" in source
-    assert "client.agent_engines.create" not in source
+    assert "client.agent_engines.create(" in source
+    assert "source_packages" in source
+    assert "entrypoint_module" in source
+    assert "agent_engine=" not in source
 
 
 def test_agent_engine_runtime_keeps_demo_instance_warm():
     assert _MIN_INSTANCES == 1
     assert _MAX_INSTANCES == 1
+
+
+def test_agent_engine_source_entrypoint_points_to_root_agent():
+    assert _SOURCE_PACKAGES == ("agents", "controller")
+    assert _ENTRYPOINT_MODULE == "agents.agent"
+    assert _ENTRYPOINT_OBJECT == "root_agent"
+
+
+def test_agent_engine_source_class_methods_include_stream_query():
+    methods = _class_methods_for_source_deploy()
+    by_name = {method["name"]: method for method in methods}
+
+    assert by_name["async_stream_query"]["api_mode"] == "async_stream"
+    assert by_name["stream_query"]["api_mode"] == "stream"

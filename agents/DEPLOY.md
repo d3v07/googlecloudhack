@@ -83,9 +83,16 @@ uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
 ```
 
 Note: `-m agents.deploy` is required (not `python agents/deploy.py`). Script mode puts
-`agents/` on `sys.path`, not the repo root, which breaks the `from agents.agent import build_agent`
-and the downstream `controller.*` imports. `-m` mode puts the repo root on `sys.path`, matching
+`agents/` on `sys.path`, not the repo root, which breaks the `agents.agent:root_agent`
+entrypoint and the downstream `controller.*` imports. `-m` mode puts the repo root on `sys.path`, matching
 pytest's `pythonpath = ["."]` config.
+
+The deploy uses Agent Engine source packages, not a pickled in-memory object:
+
+- source packages: `agents/`, `controller/`
+- entrypoint: `agents.agent:root_agent`
+- requirements file: `agents/agent_engine_requirements.txt`
+- runtime identity: Agent Identity, with `MONGODB_TARGET_URI` injected from Secret Manager
 
 Expected output:
 
