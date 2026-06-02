@@ -1,13 +1,13 @@
-"""Day-3 live demo (#40): drive the deterministic orchestrator over the live fixture so
-the agent visibly CATCHES the ESR trap.
+"""Day-3 live demo (#40): run the read-only DIAGNOSE phase over the live fixture so the
+agent visibly CATCHES the ESR trap, and persist a DIAGNOSED pack awaiting human approval.
 
-The orchestrator's before-explain hints the obvious index B, so the captured plan is the
-blocking-sort one (severity HIGH) — not the already-optimal plan the unhinted optimizer
-would pick on the two-index fixture. It then recommends + applies C, verifies the fix,
-and (with a narrator) explains it with Gemini. Emits a persisted EvidencePack the
-dashboard can render.
+The before-explain hints the obvious index B, so the captured plan is the blocking-sort one
+(severity HIGH) — not the already-optimal plan the unhinted optimizer would pick on the
+two-index fixture. The pack stops at DIAGNOSED: no index is applied here. The operator
+approves via the dashboard (POST /packs/{run_id}/decision), which is when the recommended
+index is applied and the fix verified. Emits a persisted pack the dashboard can render.
 
-Run: uv run --with python-dotenv python agents/demo.py
+Run: uv run --with python-dotenv python -m agents.demo
 """
 
 import asyncio
@@ -17,7 +17,7 @@ from pathlib import Path
 from controller.backends import PymongoBackend
 from controller.demo_fixture import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
 from controller.narrate import Narrator
-from controller.orchestrator import run_remediation
+from controller.orchestrator import run_diagnosis
 from controller.persistence import save_pack, write_pack
 from controller.schemas import EvidencePack
 
@@ -38,7 +38,7 @@ async def run_demo(
     if owns_backend:
         backend = PymongoBackend(connection_string, DB, COLL)  # pragma: no cover - live
     try:
-        return await run_remediation(
+        return await run_diagnosis(
             backend,
             run_id=run_id,
             namespace=f"{DB}.{COLL}",
@@ -76,11 +76,11 @@ def main() -> None:  # pragma: no cover - live entrypoint
     print(
         f"DEMO {pack.run_id} status={pack.status} severity={pack.finding.severity} "
         f"before_keys={pack.before.metrics.total_keys_examined} "
-        f"after_keys={pack.after.metrics.total_keys_examined if pack.after else None}"
+        f"recommend={[list(p) for p in pack.recommendation.index_spec]}"
     )
     print(f"narrative: {pack.narrative[:240] if pack.narrative else None}")
     print(f"-> {path}")
-    print(f"-> mongo {STATE_DB}.{STATE_COLL} ({pack.run_id})")
+    print(f"-> mongo {STATE_DB}.{STATE_COLL} ({pack.run_id}) [DIAGNOSED — approve via dashboard]")
 
 
 if __name__ == "__main__":  # pragma: no cover

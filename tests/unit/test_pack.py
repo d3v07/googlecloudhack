@@ -99,6 +99,7 @@ def test_matching_decision_is_accepted():
         created_at=pack.created_at,
         status=PackStatus.APPROVED,
         before=pack.before,
+        after=_before(),  # APPROVED is post-apply, so after-evidence is present
         finding=pack.finding,
         recommendation=pack.recommendation,
         decision=good,

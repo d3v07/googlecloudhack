@@ -6,7 +6,10 @@ from fastapi.testclient import TestClient
 from api.server import LocalFilePackStore, MongoPackStore, _EmptyPackStore, create_app
 from controller.ledger import evidence_hash as compute_hash
 from controller.persistence import write_pack
+from controller.phases import Phase
 from controller.schemas import (
+    Decision,
+    DecisionAction,
     Evidence,
     EvidenceMetrics,
     EvidencePack,
@@ -22,22 +25,30 @@ def _minimal_pack(run_id: str, status: PackStatus = PackStatus.DIAGNOSED) -> Evi
         query={"filter": {"x": 1}},
         explain_plan={"stage": "IXSCAN"},
         metrics=EvidenceMetrics(
-            docs_examined=1,
-            docs_returned=1,
-            millis=0,
-            total_keys_examined=1,
-            stages=("IXSCAN",),
+            docs_examined=1, docs_returned=1, millis=0, total_keys_examined=1, stages=("IXSCAN",)
         ),
     )
     rec = Recommendation(index_spec=(("x", 1),), rationale="test")
     eh = compute_hash({"evidence": before, "recommendation": rec})
+
+    # build a status-consistent pack (the model now enforces status ⟺ decision/after)
+    after: Evidence | None = None
+    decision: Decision | None = None
+    if status in (PackStatus.APPROVED, PackStatus.VERIFIED):
+        after = before
+        decision = Decision(action=DecisionAction.APPROVE, evidence_hash=eh, phase=Phase.APPROVE)
+    elif status is PackStatus.REJECTED:
+        decision = Decision(action=DecisionAction.REJECT, evidence_hash=eh, phase=Phase.APPROVE)
+
     return EvidencePack(
         run_id=run_id,
         namespace="db.coll",
         status=status,
         before=before,
+        after=after,
         finding=Finding(problem="test", severity=Severity.LOW, evidence_refs=("x",)),
         recommendation=rec,
+        decision=decision,
         evidence_hash=eh,
         created_at="2026-06-01T00:00:00Z",
     )
@@ -55,6 +66,28 @@ class FakePackStore:
 
     def save_pack(self, pack: EvidencePack) -> None:
         self._packs[pack.run_id] = pack
+
+
+class FakeEngine:
+    """In-memory stand-in for the live remediation engine — returns status-consistent packs
+    keyed to the run_id so route logic is testable with no Mongo."""
+
+    def __init__(self) -> None:
+        self.diagnosed: list[str] = []
+        self.applied: list[str] = []
+        self.rejected: list[str] = []
+
+    async def diagnose(self, run_id: str) -> EvidencePack:
+        self.diagnosed.append(run_id)
+        return _minimal_pack(run_id, PackStatus.DIAGNOSED)
+
+    async def apply_and_verify(self, pack: EvidencePack) -> EvidencePack:
+        self.applied.append(pack.run_id)
+        return _minimal_pack(pack.run_id, PackStatus.VERIFIED)
+
+    def reject(self, pack: EvidencePack) -> EvidencePack:
+        self.rejected.append(pack.run_id)
+        return _minimal_pack(pack.run_id, PackStatus.REJECTED)
 
 
 _PACKS = [
@@ -188,7 +221,6 @@ def test_create_app_with_existing_packs_dir_uses_local_file_store(
 
 
 def test_get_store_raises_when_not_overridden() -> None:
-    import pytest
     from api.routes import get_store
 
     with pytest.raises(NotImplementedError):
@@ -204,89 +236,44 @@ def test_create_app_with_missing_packs_dir_uses_empty_store(monkeypatch) -> None
         assert c.get("/packs/any").status_code == 404
 
 
-# --- approve/reject route tests ---
+# --- /decision route (approve applies+verifies via the engine; reject is a pure record) ---
 
 
-def _approval_client_and_store(pack: EvidencePack) -> tuple[TestClient, FakePackStore]:
-    store = FakePackStore([pack])
-    return TestClient(create_app(store)), store
+def _decision_setup(pack: EvidencePack) -> tuple[TestClient, FakePackStore, FakeEngine]:
+    store, engine = FakePackStore([pack]), FakeEngine()
+    return TestClient(create_app(store, engine)), store, engine
 
 
-def test_approve_transitions_to_approved() -> None:
-    pack = _minimal_pack("run-approve")
-    client, store = _approval_client_and_store(pack)
-    resp = client.post("/packs/run-approve/approve", json={"evidence_hash": pack.evidence_hash})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == PackStatus.APPROVED.value
-    assert data["decision"]["action"] == "approve"
-    assert data["decision"]["evidence_hash"] == pack.evidence_hash
-    # persisted in store
-    assert store.get_pack("run-approve").status == PackStatus.APPROVED
-
-
-def test_reject_transitions_to_rejected() -> None:
-    pack = _minimal_pack("run-reject")
-    client, store = _approval_client_and_store(pack)
-    resp = client.post("/packs/run-reject/reject", json={"evidence_hash": pack.evidence_hash})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == PackStatus.REJECTED.value
-    assert data["decision"]["action"] == "reject"
-    assert store.get_pack("run-reject").status == PackStatus.REJECTED
-
-
-def test_approve_unknown_run_id_returns_404() -> None:
-    store = FakePackStore([])
-    client = TestClient(create_app(store))
-    resp = client.post("/packs/no-such-run/approve", json={"evidence_hash": "a" * 64})
-    assert resp.status_code == 404
-
-
-def test_approve_evidence_hash_mismatch_returns_409() -> None:
-    pack = _minimal_pack("run-mismatch")
-    client, _ = _approval_client_and_store(pack)
-    resp = client.post("/packs/run-mismatch/approve", json={"evidence_hash": "b" * 64})
-    assert resp.status_code == 409
-
-
-def test_approve_already_approved_pack_returns_409() -> None:
-    pack = _minimal_pack("run-already", status=PackStatus.APPROVED)
-    client, _ = _approval_client_and_store(pack)
-    resp = client.post("/packs/run-already/approve", json={"evidence_hash": pack.evidence_hash})
-    assert resp.status_code == 409
-
-
-# --- /decision route (the dashboard's #26 endpoint) ---
-
-
-def test_decision_approve_returns_updated_pack() -> None:
+def test_decision_approve_applies_and_returns_verified_pack() -> None:
     pack = _minimal_pack("run-dec")
-    client, store = _approval_client_and_store(pack)
+    client, store, engine = _decision_setup(pack)
     resp = client.post(
         "/packs/run-dec/decision",
         json={"decision": "approve", "evidence_hash": pack.evidence_hash, "approver": "op"},
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["status"] == PackStatus.APPROVED.value
+    assert data["status"] == PackStatus.VERIFIED.value
     assert data["decision"]["action"] == "approve"
-    assert store.get_pack("run-dec").status == PackStatus.APPROVED
+    assert engine.applied == ["run-dec"]  # the gated mutation went through the engine
+    assert store.get_pack("run-dec").status == PackStatus.VERIFIED
 
 
-def test_decision_reject_returns_updated_pack() -> None:
+def test_decision_reject_records_without_mutating() -> None:
     pack = _minimal_pack("run-dec2")
-    client, _ = _approval_client_and_store(pack)
+    client, _, engine = _decision_setup(pack)
     resp = client.post(
         "/packs/run-dec2/decision",
         json={"decision": "reject", "evidence_hash": pack.evidence_hash, "note": "wrong index"},
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == PackStatus.REJECTED.value
+    assert engine.rejected == ["run-dec2"]
+    assert engine.applied == []  # reject must not apply an index
 
 
 def test_decision_unknown_run_id_returns_404_not_found() -> None:
-    client = TestClient(create_app(FakePackStore([])))
+    client, _, _ = _decision_setup(_minimal_pack("present"))
     resp = client.post(
         "/packs/nope/decision", json={"decision": "approve", "evidence_hash": "a" * 64}
     )
@@ -296,7 +283,7 @@ def test_decision_unknown_run_id_returns_404_not_found() -> None:
 
 def test_decision_stale_evidence_hash_returns_409_with_current_hash() -> None:
     pack = _minimal_pack("run-stale")
-    client, _ = _approval_client_and_store(pack)
+    client, _, engine = _decision_setup(pack)
     resp = client.post(
         "/packs/run-stale/decision", json={"decision": "approve", "evidence_hash": "b" * 64}
     )
@@ -304,17 +291,72 @@ def test_decision_stale_evidence_hash_returns_409_with_current_hash() -> None:
     body = resp.json()
     assert body["error"] == "stale_evidence_hash"
     assert body["current_hash"] == pack.evidence_hash
+    assert engine.applied == []  # a stale hash must never trigger a mutation
 
 
 def test_decision_already_decided_returns_409() -> None:
     pack = _minimal_pack("run-done", status=PackStatus.APPROVED)
-    client, _ = _approval_client_and_store(pack)
+    client, _, _ = _decision_setup(pack)
     resp = client.post(
         "/packs/run-done/decision",
         json={"decision": "approve", "evidence_hash": pack.evidence_hash},
     )
     assert resp.status_code == 409
     assert resp.json()["error"] == "already_decided"
+
+
+# --- POST /run route (#37 — DIAGNOSE-only, no mutation) ---
+
+
+def test_run_with_explicit_run_id_persists_diagnosed_pack() -> None:
+    store, engine = FakePackStore([]), FakeEngine()
+    client = TestClient(create_app(store, engine))
+    resp = client.post("/run", json={"run_id": "run-fixed"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["run_id"] == "run-fixed"
+    assert data["status"] == PackStatus.DIAGNOSED.value  # /run never mutates
+    assert engine.diagnosed == ["run-fixed"]
+    assert engine.applied == []
+    assert store.get_pack("run-fixed") is not None
+
+
+def test_run_generates_run_id_when_no_body() -> None:
+    store, engine = FakePackStore([]), FakeEngine()
+    client = TestClient(create_app(store, engine))
+    resp = client.post("/run")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["run_id"].startswith("run-")
+    assert engine.diagnosed == [data["run_id"]]
+    assert store.get_pack(data["run_id"]) is not None
+
+
+def test_run_returned_pack_validates_as_evidence_pack() -> None:
+    client = TestClient(create_app(FakePackStore([]), FakeEngine()))
+    resp = client.post("/run", json={})
+    assert resp.status_code == 200
+    EvidencePack.model_validate(resp.json())
+
+
+def test_get_engine_raises_when_not_overridden() -> None:
+    from api.routes import get_engine
+
+    with pytest.raises(NotImplementedError):
+        get_engine()
+
+
+def test_api_server_does_not_import_agents_layer() -> None:
+    """The read-API image packages only api/ + controller/ + contracts/ (see Dockerfile).
+    _LiveEngine must source the demo fixture from controller/, never agents/, or the live
+    endpoints raise ModuleNotFoundError in the container. Guards against re-coupling."""
+    import inspect
+
+    import api.server
+
+    src = inspect.getsource(api.server)
+    assert "from agents" not in src
+    assert "import agents" not in src
 
 
 # --- save_pack store-level tests ---
@@ -382,65 +424,3 @@ def test_create_app_uses_empty_store_when_no_mongo_secret_and_no_dir(monkeypatch
     app = create_app()
     with TestClient(app) as c:
         assert c.get("/packs").json() == []
-
-
-# --- POST /run route (#37 live-run trigger) ---
-
-
-class FakeRunner:
-    def __init__(self) -> None:
-        self.calls: list[str] = []
-
-    async def run(self, run_id: str) -> EvidencePack:
-        self.calls.append(run_id)
-        return _minimal_pack(run_id, PackStatus.VERIFIED)
-
-
-def test_run_with_explicit_run_id_persists_and_returns() -> None:
-    store, runner = FakePackStore([]), FakeRunner()
-    client = TestClient(create_app(store, runner))
-    resp = client.post("/run", json={"run_id": "run-fixed"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["run_id"] == "run-fixed"
-    assert data["status"] == PackStatus.VERIFIED.value
-    assert runner.calls == ["run-fixed"]
-    assert store.get_pack("run-fixed") is not None
-
-
-def test_run_generates_run_id_when_no_body() -> None:
-    store, runner = FakePackStore([]), FakeRunner()
-    client = TestClient(create_app(store, runner))
-    resp = client.post("/run")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["run_id"].startswith("run-")
-    assert runner.calls == [data["run_id"]]
-    assert store.get_pack(data["run_id"]) is not None
-
-
-def test_run_returned_pack_validates_as_evidence_pack() -> None:
-    client = TestClient(create_app(FakePackStore([]), FakeRunner()))
-    resp = client.post("/run", json={})
-    assert resp.status_code == 200
-    EvidencePack.model_validate(resp.json())
-
-
-def test_get_runner_raises_when_not_overridden() -> None:
-    from api.routes import get_runner
-
-    with pytest.raises(NotImplementedError):
-        get_runner()
-
-
-def test_api_server_does_not_import_agents_layer() -> None:
-    """The read-API image packages only api/ + controller/ + contracts/ (see Dockerfile).
-    _LiveRunner must source the demo fixture from controller/, never agents/, or POST /run
-    raises ModuleNotFoundError in the container. Guards against re-coupling."""
-    import inspect
-
-    import api.server
-
-    src = inspect.getsource(api.server)
-    assert "from agents" not in src
-    assert "import agents" not in src

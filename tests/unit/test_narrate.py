@@ -5,9 +5,17 @@ import asyncio
 from controller.backends import FakeBackend
 from controller.diagnosis import diagnose
 from controller.narrate import GeminiNarrator, Narrator, build_narration_prompt
-from controller.orchestrator import run_remediation
-from controller.pack import build_pack
-from controller.schemas import Evidence, EvidenceMetrics, EvidencePack, PackStatus
+from controller.orchestrator import run_diagnosis
+from controller.pack import build_pack, pack_evidence_hash
+from controller.phases import Phase
+from controller.schemas import (
+    Decision,
+    DecisionAction,
+    Evidence,
+    EvidenceMetrics,
+    EvidencePack,
+    PackStatus,
+)
 
 QUERY_FILTER = {"storeLocation": "Denver", "customer.age": {"$gte": 30, "$lte": 50}}
 QUERY_SORT = [("saleDate", -1)]
@@ -51,15 +59,29 @@ def _diagnosed_pack(with_after: bool = False) -> EvidencePack:
     diagnosis = diagnose(
         QUERY_FILTER, QUERY_SORT, has_blocking_sort=True, current_index="esr_wrong_B"
     )
+    before = _before_evidence()
+    if not with_after:
+        return build_pack(
+            run_id=RUN_ID,
+            namespace=NAMESPACE,
+            created_at=CREATED_AT,
+            before=before,
+            finding=diagnosis.finding,
+            recommendation=diagnosis.recommendation,
+            status=PackStatus.DIAGNOSED,
+        )
+    # a VERIFIED pack is post-approval: it carries an approve decision + after-evidence
+    eh = pack_evidence_hash(before, diagnosis.recommendation)
     return build_pack(
         run_id=RUN_ID,
         namespace=NAMESPACE,
         created_at=CREATED_AT,
-        before=_before_evidence(),
+        before=before,
         finding=diagnosis.finding,
         recommendation=diagnosis.recommendation,
-        status=PackStatus.DIAGNOSED if not with_after else PackStatus.VERIFIED,
-        after=_after_evidence() if with_after else None,
+        status=PackStatus.VERIFIED,
+        after=_after_evidence(),
+        decision=Decision(action=DecisionAction.APPROVE, evidence_hash=eh, phase=Phase.APPROVE),
     )
 
 
@@ -114,13 +136,11 @@ def test_prompt_without_after_says_not_yet_measured():
     assert "not yet measured" in prompt
 
 
-def test_run_remediation_with_narrator_sets_narrative():
-    before = _before_evidence(has_blocking_sort=True, keys_examined=17000)
-    after = _after_evidence(has_blocking_sort=False, keys_examined=20)
-    backend = FakeBackend([before, after])
+def test_run_diagnosis_with_narrator_sets_narrative():
+    backend = FakeBackend([_before_evidence(has_blocking_sort=True, keys_examined=17000)])
 
     pack = asyncio.run(
-        run_remediation(
+        run_diagnosis(
             backend,
             run_id=RUN_ID,
             namespace=NAMESPACE,
@@ -135,13 +155,11 @@ def test_run_remediation_with_narrator_sets_narrative():
     assert pack.narrative == "fake narrative"
 
 
-def test_run_remediation_without_narrator_leaves_narrative_none():
-    before = _before_evidence(has_blocking_sort=True)
-    after = _after_evidence(has_blocking_sort=False)
-    backend = FakeBackend([before, after])
+def test_run_diagnosis_without_narrator_leaves_narrative_none():
+    backend = FakeBackend([_before_evidence(has_blocking_sort=True)])
 
     pack = asyncio.run(
-        run_remediation(
+        run_diagnosis(
             backend,
             run_id=RUN_ID,
             namespace=NAMESPACE,

@@ -69,7 +69,7 @@ in the repo root and push the image to Artifact Registry automatically.
    - `GOOGLE_CLOUD_PROJECT=performer-497915` — used by the Secret Manager client
    - `MONGO_SECRET_NAME=mongodb-connection-string` — the secret name (not the value)
    - SA: `dbre-agent@performer-497915.iam.gserviceaccount.com`
-   - 0–1 instances (a single instance keeps the `POST /run` in-process lock authoritative), concurrency 80, 512 MiB, 1 vCPU
+   - 0–3 instances, 512 MiB, 1 vCPU
 3. Prints the live service URL.
 
 ---
@@ -103,18 +103,20 @@ curl -sf "${SERVICE_URL}/packs/RUN_ID"
 # 404 if pack doesn't exist
 ```
 
-**Approve a pack (pack must be in DIAGNOSED status):**
-```bash
-curl -sf -X POST "${SERVICE_URL}/packs/RUN_ID/approve" \
-  -H "Content-Type: application/json" \
-  -d '{"evidence_hash": "<hash-from-pack>"}'
-```
-
-**Trigger a live agent run (#37 — runs the deterministic pipeline over the demo fixture):**
+**Trigger a DIAGNOSE-only live run (#37 — read-only, no mutation):**
 ```bash
 curl -sf -X POST "${SERVICE_URL}/run" -H "Content-Type: application/json" -d '{}'
-# Expected: 200 + a VERIFIED EvidencePack (run_id "run-…", before≈17209 / after≈64 keys).
-# Synchronous — a few seconds, longer on a cold start. `narrative` is absent (deterministic only).
+# Expected: 200 + a DIAGNOSED EvidencePack (run_id "run-…", before≈17209 keys, blocking sort,
+# severity high, recommendation). No index is applied yet.
+```
+
+**Approve → apply + verify (the human-gated mutation):**
+```bash
+curl -sf -X POST "${SERVICE_URL}/packs/RUN_ID/decision" \
+  -H "Content-Type: application/json" \
+  -d '{"decision": "approve", "evidence_hash": "<hash-from-pack>"}'
+# Applies the recommended index and verifies → 200 + a VERIFIED pack (after≈64 keys, no sort).
+# 409 stale_evidence_hash if the hash doesn't match; 409 already_decided if not DIAGNOSED.
 ```
 
 ---
