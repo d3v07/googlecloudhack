@@ -141,11 +141,15 @@ phase gate, apply, verification, and ledger writes.
 ## Cost Notes
 
 Agent Engine billing is per vCPU-second and GiB-second of runtime (compute), plus standard
-Gemini token charges. With `min_instances=0` the engine scales to zero when idle — no continuous
-compute cost. Expect cold-start latency (~10-30 s) on the first call after idle. LLM calls are
-billed at the Gemini model rate regardless of warm/cold state.
+Gemini token charges. The demo deployment keeps `min_instances=1` and `max_instances=1` so the
+hosted runtime has a live instance for direct smoke tests and Cloud Run `/run` calls. Google
+documents `min_instances=1` as the default; while this runtime-control feature is in Preview,
+Google says higher minimum instances are not billed while the agent is idle. Recheck that note
+before leaving the engine running after the hackathon. LLM calls are billed at the Gemini model
+rate regardless of warm/cold state.
 
-Rough estimate for hackathon use (light traffic, mostly idle): < $2 total.
+Rough estimate for hackathon use (light traffic, mostly idle): < $2 total, assuming the Preview
+idle-billing behavior still applies.
 
 ## Teardown
 
