@@ -93,6 +93,8 @@ The deploy uses Agent Engine source packages, not a pickled in-memory object:
 - entrypoint: `agents.agent_engine_app:adk_app`
 - requirements file: `agents/agent_engine_requirements.txt`
 - runtime identity: Agent Identity, with `MONGODB_TARGET_URI` injected from Secret Manager
+- runtime env: non-reserved `GCRAH_AGENT_PROJECT` / `GCRAH_AGENT_LOCATION` seed
+  the ADK app initialization; Google-reserved `GOOGLE_CLOUD_PROJECT` is not set by the deploy script
 
 Expected output:
 

@@ -55,8 +55,8 @@ def _agent_env_vars(
     secret_name = os.environ.get("MONGO_SECRET_NAME", "mongodb-connection-string")
     secret_version = os.environ.get("MONGO_SECRET_VERSION", "latest")
     return {
-        "GOOGLE_CLOUD_PROJECT": project or os.environ.get("GOOGLE_CLOUD_PROJECT", ""),
-        "GOOGLE_CLOUD_LOCATION": location or os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
+        "GCRAH_AGENT_PROJECT": project or os.environ.get("GOOGLE_CLOUD_PROJECT", ""),
+        "GCRAH_AGENT_LOCATION": location or os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
         "MONGODB_TARGET_URI": {"secret": secret_name, "version": secret_version},
         "GEMINI_MODEL": os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
     }
