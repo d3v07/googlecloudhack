@@ -15,18 +15,18 @@ The API reads the MongoDB Atlas URI from Secret Manager at startup. Create it on
 
 ```bash
 # Create the secret
-gcloud secrets create gcrah-mongo-uri \
+gcloud secrets create mongodb-connection-string \
   --replication-policy=automatic \
   --project=performer-497915
 
 # Add the connection string as version 1
 echo -n "mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/dbre_state?retryWrites=true" \
-  | gcloud secrets versions add gcrah-mongo-uri \
+  | gcloud secrets versions add mongodb-connection-string \
       --data-file=- \
       --project=performer-497915
 ```
 
-The secret name (`gcrah-mongo-uri`) is what you pass as `MONGO_SECRET_NAME`. The API
+The secret name (`mongodb-connection-string`) is what you pass as `MONGO_SECRET_NAME`. The API
 resolves the actual value using the Secret Manager SDK at runtime — the plaintext URI
 never appears in Cloud Run env vars or logs.
 
@@ -41,7 +41,7 @@ dbre-agent@performer-497915.iam.gserviceaccount.com
 Grant it access to the secret:
 
 ```bash
-gcloud secrets add-iam-policy-binding gcrah-mongo-uri \
+gcloud secrets add-iam-policy-binding mongodb-connection-string \
   --project=performer-497915 \
   --role=roles/secretmanager.secretAccessor \
   --member="serviceAccount:dbre-agent@performer-497915.iam.gserviceaccount.com"
@@ -55,7 +55,7 @@ Run from the **repo root**:
 
 ```bash
 export GCP_PROJECT=performer-497915
-export MONGO_SECRET_NAME=gcrah-mongo-uri
+export MONGO_SECRET_NAME=mongodb-connection-string
 bash deploy/deploy_cloudrun.sh
 ```
 
@@ -67,9 +67,9 @@ in the repo root and push the image to Artifact Registry automatically.
 1. Grants `roles/secretmanager.secretAccessor` on the secret to the SA (idempotent).
 2. Calls `gcloud run deploy` with:
    - `GOOGLE_CLOUD_PROJECT=performer-497915` — used by the Secret Manager client
-   - `MONGO_SECRET_NAME=gcrah-mongo-uri` — the secret name (not the value)
+   - `MONGO_SECRET_NAME=mongodb-connection-string` — the secret name (not the value)
    - SA: `dbre-agent@performer-497915.iam.gserviceaccount.com`
-   - 0–3 instances, 512 MiB, 1 vCPU
+   - 0–1 instances (a single instance keeps the `POST /run` in-process lock authoritative), concurrency 80, 512 MiB, 1 vCPU
 3. Prints the live service URL.
 
 ---
@@ -110,6 +110,13 @@ curl -sf -X POST "${SERVICE_URL}/packs/RUN_ID/approve" \
   -d '{"evidence_hash": "<hash-from-pack>"}'
 ```
 
+**Trigger a live agent run (#37 — runs the deterministic pipeline over the demo fixture):**
+```bash
+curl -sf -X POST "${SERVICE_URL}/run" -H "Content-Type: application/json" -d '{}'
+# Expected: 200 + a VERIFIED EvidencePack (run_id "run-…", before≈17209 / after≈64 keys).
+# Synchronous — a few seconds, longer on a cold start. `narrative` is absent (deterministic only).
+```
+
 ---
 
 ## Estimated Cost
@@ -138,7 +145,7 @@ gcloud run services delete gcrah-read-api \
 
 To also delete the secret:
 ```bash
-gcloud secrets delete gcrah-mongo-uri --project performer-497915 --quiet
+gcloud secrets delete mongodb-connection-string --project performer-497915 --quiet
 ```
 
 ---

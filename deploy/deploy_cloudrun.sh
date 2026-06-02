@@ -20,7 +20,7 @@
 #
 # USAGE:
 #   export GCP_PROJECT=performer-497915
-#   export MONGO_SECRET_NAME=gcrah-mongo-uri
+#   export MONGO_SECRET_NAME=mongodb-connection-string
 #   bash deploy/deploy_cloudrun.sh
 
 set -euo pipefail
@@ -30,7 +30,7 @@ GCP_PROJECT="${GCP_PROJECT:-performer-497915}"
 REGION="${REGION:-us-central1}"
 SERVICE_NAME="${SERVICE_NAME:-gcrah-read-api}"
 SERVICE_ACCOUNT="${SERVICE_ACCOUNT:-dbre-agent@${GCP_PROJECT}.iam.gserviceaccount.com}"
-MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-gcrah-mongo-uri}"
+MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-mongodb-connection-string}"
 # ───────────────────────────────────────────────────────────────────────────────
 
 echo "==> Granting Secret Manager accessor role to ${SERVICE_ACCOUNT}"
