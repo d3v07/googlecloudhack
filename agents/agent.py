@@ -74,3 +74,6 @@ def build_agent(phase: Phase = Phase.DIAGNOSE, extra_tools: Sequence[Any] = ()) 
         instruction=INSTRUCTION,
         before_tool_callback=make_gate(phase),
     )
+
+
+root_agent = build_agent()

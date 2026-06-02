@@ -14,8 +14,11 @@ importable in CI without the aiplatform package installed.
 
 import argparse
 import os
+from typing import Any
 
-from agents.agent import build_agent
+from google.protobuf import json_format
+
+from agents.agent import root_agent
 
 _REQUIREMENTS = [
     "google-cloud-aiplatform[agent_engines]>=1.112",
@@ -24,8 +27,12 @@ _REQUIREMENTS = [
     "pymongo>=4.6",
     "cloudpickle>=3.0",
 ]
+_REQUIREMENTS_FILE = "agents/agent_engine_requirements.txt"
 _MIN_INSTANCES = 1
 _MAX_INSTANCES = 1
+_SOURCE_PACKAGES = ("agents", "controller")
+_ENTRYPOINT_MODULE = "agents.agent"
+_ENTRYPOINT_OBJECT = "root_agent"
 
 
 def _staging_bucket(project: str) -> str:
@@ -50,9 +57,22 @@ def _agent_env_vars() -> dict[str, str | dict[str, str]]:
     }
 
 
+def _class_methods_for_source_deploy() -> list[dict[str, Any]]:
+    from vertexai import agent_engines
+    from vertexai.agent_engines import _agent_engines
+
+    app = agent_engines.AdkApp(agent=root_agent, app_name="gcrah_dbre_agent")
+    operations = _agent_engines._get_registered_operations(app)
+    methods = _agent_engines._generate_class_methods_spec_or_raise(
+        agent_engine=app,
+        operations=operations,
+    )
+    return [json_format.MessageToDict(method) for method in methods]
+
+
 def deploy() -> str:  # pragma: no cover - live deploy
     import vertexai
-    from vertexai import agent_engines
+    from vertexai import types as vertexai_types
 
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
@@ -64,20 +84,24 @@ def deploy() -> str:  # pragma: no cover - live deploy
     print(f"STAGING_BUCKET={staging_bucket}")
     print(f"MONGO_SECRET_NAME={env_vars['MONGODB_TARGET_URI']['secret']}")
 
-    vertexai.init(project=project, location=location, staging_bucket=staging_bucket)
-    app = agent_engines.AdkApp(agent=build_agent(), app_name="gcrah_dbre_agent")
-
-    remote_agent = agent_engines.create(
-        agent_engine=app,
-        display_name="GCRAH DBRE Agent",
-        description="Evidence-driven MongoDB performance engineer — ESR index diagnosis.",
-        requirements=_REQUIREMENTS,
-        # the pickled agent's tools import these local packages — ship them into
-        # the runtime (pip requirements alone don't include first-party code)
-        extra_packages=["controller", "agents"],
-        env_vars=env_vars,
-        min_instances=_MIN_INSTANCES,
-        max_instances=_MAX_INSTANCES,
+    client = vertexai.Client(project=project, location=location)
+    remote_agent = client.agent_engines.create(
+        config={
+            "display_name": "GCRAH DBRE Agent",
+            "description": "Evidence-driven MongoDB performance engineer — ESR index diagnosis.",
+            "source_packages": list(_SOURCE_PACKAGES),
+            "entrypoint_module": _ENTRYPOINT_MODULE,
+            "entrypoint_object": _ENTRYPOINT_OBJECT,
+            "requirements_file": _REQUIREMENTS_FILE,
+            "class_methods": _class_methods_for_source_deploy(),
+            "agent_framework": "google-adk",
+            "python_version": "3.12",
+            "staging_bucket": staging_bucket,
+            "env_vars": env_vars,
+            "identity_type": vertexai_types.IdentityType.AGENT_IDENTITY,
+            "min_instances": _MIN_INSTANCES,
+            "max_instances": _MAX_INSTANCES,
+        }
     )
 
     resource_name = _resource_name(remote_agent)
