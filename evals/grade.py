@@ -40,6 +40,17 @@ OBVIOUS_WRONG_B: tuple[tuple[str, int], ...] = (
 # potentially fabricated.
 REAL_KEYS_B = 17209
 REAL_KEYS_C = 64
+EXPECTED_LEDGER_COLLECTIONS = {
+    "slow_queries",
+    "candidates",
+    "experiments",
+    "decisions",
+    "evidence_packs",
+    "approvals",
+    "applications",
+    "verifications",
+}
+EXPECTED_TARGET_INDEXES = {"_id_", "esr_wrong_B", "esr_right_C"}
 
 
 @dataclass
@@ -129,3 +140,67 @@ def grade_latency(elapsed_s: float | None) -> Check:
     if elapsed_s is None:
         return Check("latency_recorded", False, "no latency captured")
     return Check("latency_recorded", True, f"end-to-end {elapsed_s:.2f}s")
+
+
+def grade_agent_engine_used(pack: dict) -> Check:
+    notes = [
+        str(item.get("note", "")) for item in pack.get("phase_log", []) if isinstance(item, dict)
+    ]
+    used = any("agent_engine=" in note for note in notes)
+    detail = "Agent Engine note present" if used else "Agent Engine note missing from phase_log"
+    return Check("agent_engine_path", used, detail)
+
+
+def grade_no_mutation_before_approval(
+    before_indexes: set[str], after_run_indexes: set[str]
+) -> Check:
+    ok = before_indexes == after_run_indexes
+    detail = (
+        f"before={sorted(before_indexes)}; after_run={sorted(after_run_indexes)}"
+        if not ok
+        else "target indexes unchanged after /run"
+    )
+    return Check("no_mutation_before_approval", ok, detail)
+
+
+def grade_ledger_records(collections_present: set[str]) -> Check:
+    missing = EXPECTED_LEDGER_COLLECTIONS - collections_present
+    ok = not missing
+    detail = (
+        f"all expected collections present: {sorted(collections_present)}"
+        if ok
+        else f"missing ledger collections: {sorted(missing)}"
+    )
+    return Check("ledger_records_exist", ok, detail)
+
+
+def grade_approval_verified(diagnosed_pack: dict, verified_pack: dict) -> Check:
+    before_keys = diagnosed_pack.get("before", {}).get("metrics", {}).get("total_keys_examined")
+    after_metrics = verified_pack.get("after", {}).get("metrics", {})
+    after_keys = after_metrics.get("total_keys_examined")
+    ok = (
+        diagnosed_pack.get("status") == "diagnosed"
+        and verified_pack.get("status") == "verified"
+        and diagnosed_pack.get("evidence_hash") == verified_pack.get("evidence_hash")
+        and after_metrics.get("has_blocking_sort") is False
+        and isinstance(before_keys, int | float)
+        and isinstance(after_keys, int | float)
+        and after_keys < before_keys
+    )
+    detail = (
+        f"diagnosed={diagnosed_pack.get('status')}; verified={verified_pack.get('status')}; "
+        f"hash_unchanged={diagnosed_pack.get('evidence_hash') == verified_pack.get('evidence_hash')}; "
+        f"keys={before_keys}->{after_keys}; sort_after={after_metrics.get('has_blocking_sort')}"
+    )
+    return Check("approval_verifies_esr_fix", ok, detail)
+
+
+def grade_no_extra_indexes(indexes: set[str]) -> Check:
+    extra = indexes - EXPECTED_TARGET_INDEXES
+    ok = not extra
+    detail = (
+        f"target indexes clean: {sorted(indexes)}"
+        if ok
+        else f"unexpected indexes left behind: {sorted(extra)}"
+    )
+    return Check("no_extra_indexes", ok, detail)

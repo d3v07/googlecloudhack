@@ -59,6 +59,10 @@ curl -sf -X POST "$URL/api/run" -H 'content-type: application/json' -d '{}' \
 
 Expected: `homepage ok`, then `run -> diagnosed`.
 
+In the rendered page, a live run should show `pending approval`, the
+`evidence hash`, and a live/ledger persisted footer. Approving the run should
+settle the action bar as `Fix verified`.
+
 ## Local verification (already done)
 
 The standalone server was run exactly as the container does it

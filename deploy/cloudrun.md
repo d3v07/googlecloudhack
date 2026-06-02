@@ -65,10 +65,10 @@ The script uses `--source .` which triggers Cloud Build to build from the `Docke
 in the repo root and push the image to Artifact Registry automatically.
 
 > **Write auth:** `POST /run` and `POST /packs/{id}/decision` require the
-> `X-API-Token` header to match `RUN_API_TOKEN`. If `RUN_API_TOKEN` is empty at deploy,
-> the script warns and the writes are unauthenticated. Reads (`/health`, `/packs`) are
-> always public. The dashboard must send the token (server-side proxy preferred over
-> exposing it in the client bundle).
+> `X-API-Token` header to match `RUN_API_TOKEN`. The deploy script fails if
+> `RUN_API_TOKEN` is empty. Reads (`/health`, `/packs`) are always public. The
+> dashboard must send the token from its server-side proxy; never expose it in
+> the client bundle.
 >
 > **Agent Engine:** `AGENT_ENGINE_RESOURCE` is required for deploy. `/run` uses that
 > resource as the diagnosis/rationale layer, then the deterministic controller validates
@@ -133,6 +133,11 @@ curl -sf -X POST "${SERVICE_URL}/packs/RUN_ID/decision" \
 # Applies the recommended index and verifies → 200 + a VERIFIED pack (after≈64 keys, no sort).
 # 409 stale_evidence_hash if the hash doesn't match; 409 already_decided if not DIAGNOSED.
 ```
+
+**Ledger records:** a completed approve flow creates or updates one deterministic
+record for the run in each internal collection: `slow_queries`, `candidates`,
+`experiments`, `decisions`, `evidence_packs`, `approvals`, `applications`, and
+`verifications`.
 
 ---
 

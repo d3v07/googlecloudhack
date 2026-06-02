@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ShieldCheck,
   XCircle,
@@ -35,8 +35,16 @@ export function ApproveBar({
   const [busy, setBusy] = useState<DecisionKind | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setLocalStatus(status);
+    setBusy(null);
+    setError(null);
+  }, [runId, evidenceHash, status]);
+
   const pending = localStatus === "diagnosed";
-  const settled = localStatus === "approved" || localStatus === "rejected";
+  const settled =
+    localStatus === "approved" || localStatus === "verified" || localStatus === "rejected";
+  const success = localStatus === "approved" || localStatus === "verified";
 
   async function decide(decision: DecisionKind) {
     setBusy(decision);
@@ -73,13 +81,17 @@ export function ApproveBar({
         )}
 
         {settled ? (
-          <span className={styles.settled} data-decision={localStatus}>
-            {localStatus === "approved" ? (
+          <span className={styles.settled} data-decision={success ? "approved" : "rejected"}>
+            {success ? (
               <ShieldCheck weight="fill" size={18} />
             ) : (
               <XCircle weight="fill" size={18} />
             )}
-            {localStatus === "approved" ? "Fix approved" : "Fix rejected"}
+            {localStatus === "verified"
+              ? "Fix verified"
+              : localStatus === "approved"
+                ? "Fix approved"
+                : "Fix rejected"}
           </span>
         ) : (
           <>
