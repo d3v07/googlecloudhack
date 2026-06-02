@@ -81,11 +81,15 @@ class FakeEngine:
         self.diagnosed.append(run_id)
         return _minimal_pack(run_id, PackStatus.DIAGNOSED)
 
-    async def apply_and_verify(self, pack: EvidencePack) -> EvidencePack:
+    async def apply_and_verify(
+        self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
+    ) -> EvidencePack:
         self.applied.append(pack.run_id)
         return _minimal_pack(pack.run_id, PackStatus.VERIFIED)
 
-    def reject(self, pack: EvidencePack) -> EvidencePack:
+    def reject(
+        self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
+    ) -> EvidencePack:
         self.rejected.append(pack.run_id)
         return _minimal_pack(pack.run_id, PackStatus.REJECTED)
 

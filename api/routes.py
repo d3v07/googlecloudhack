@@ -31,8 +31,12 @@ class Engine(Protocol):
     apply_and_verify() performs the human-approved index mutation; reject() is a no-op record."""
 
     async def diagnose(self, run_id: str) -> EvidencePack: ...
-    async def apply_and_verify(self, pack: EvidencePack) -> EvidencePack: ...
-    def reject(self, pack: EvidencePack) -> EvidencePack: ...
+    async def apply_and_verify(
+        self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
+    ) -> EvidencePack: ...
+    def reject(
+        self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
+    ) -> EvidencePack: ...
 
 
 def get_store() -> PackStore:
@@ -107,8 +111,8 @@ async def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep, engin
             content={"error": "stale_evidence_hash", "current_hash": pack.evidence_hash},
         )
     if body.decision == "approve":
-        updated = await engine.apply_and_verify(pack)
+        updated = await engine.apply_and_verify(pack, approver=body.approver, note=body.note)
     else:
-        updated = engine.reject(pack)
+        updated = engine.reject(pack, approver=body.approver, note=body.note)
     store.save_pack(updated)
     return updated.model_dump(mode="json")
