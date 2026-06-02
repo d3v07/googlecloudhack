@@ -57,10 +57,18 @@ def _agent_env_vars() -> dict[str, str | dict[str, str]]:
     }
 
 
-def _class_methods_for_source_deploy() -> list[dict[str, Any]]:
+def _class_methods_for_source_deploy(
+    project: str | None = None,
+    location: str | None = None,
+) -> list[dict[str, Any]]:
+    import vertexai
     from vertexai import agent_engines
     from vertexai.agent_engines import _agent_engines
 
+    vertexai.init(
+        project=project or os.environ.get("GOOGLE_CLOUD_PROJECT", "local-ci"),
+        location=location or os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
+    )
     app = agent_engines.AdkApp(agent=root_agent, app_name="gcrah_dbre_agent")
     operations = _agent_engines._get_registered_operations(app)
     methods = _agent_engines._generate_class_methods_spec_or_raise(
@@ -93,7 +101,7 @@ def deploy() -> str:  # pragma: no cover - live deploy
             "entrypoint_module": _ENTRYPOINT_MODULE,
             "entrypoint_object": _ENTRYPOINT_OBJECT,
             "requirements_file": _REQUIREMENTS_FILE,
-            "class_methods": _class_methods_for_source_deploy(),
+            "class_methods": _class_methods_for_source_deploy(project, location),
             "agent_framework": "google-adk",
             "python_version": "3.12",
             "staging_bucket": staging_bucket,
