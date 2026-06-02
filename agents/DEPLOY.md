@@ -64,7 +64,7 @@ GOOGLE_CLOUD_STAGING_BUCKET=gs://performer-497915-agent-engine-staging
 From the repo root (takes 3-5 minutes while Agent Engine builds the container):
 
 ```bash
-uv run --with "google-cloud-aiplatform[agent_engines,adk]>=1.112" \
+uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
        --with google-adk \
        --with python-dotenv \
        python -m agents.deploy
@@ -73,7 +73,7 @@ uv run --with "google-cloud-aiplatform[agent_engines,adk]>=1.112" \
 Or explicitly pass the `deploy` subcommand:
 
 ```bash
-uv run --with "google-cloud-aiplatform[agent_engines,adk]>=1.112" \
+uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
        --with google-adk \
        --with python-dotenv \
        python -m agents.deploy deploy
@@ -159,7 +159,7 @@ Rough estimate for hackathon use (light traffic, mostly idle): < $2 total.
 After the hackathon, delete the persistent engine:
 
 ```bash
-uv run --with "google-cloud-aiplatform[agent_engines,adk]>=1.112" \
+uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
        --with google-adk \
        --with python-dotenv \
        python -m agents.deploy teardown --name "projects/782567466199/locations/us-central1/reasoningEngines/<id>"

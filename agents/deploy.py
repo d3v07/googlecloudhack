@@ -3,7 +3,7 @@
 Creates a PERSISTENT (not torn-down) Agent Engine resource — the hackathon hosted URL.
 
 Run:
-    uv run --with "google-cloud-aiplatform[agent_engines,adk]>=1.112" \\
+    uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \\
            --with google-adk \\
            --with python-dotenv \\
            python -m agents.deploy [deploy | teardown --name RESOURCE_NAME]
@@ -18,8 +18,8 @@ import os
 from agents.agent import build_agent
 
 _REQUIREMENTS = [
-    "google-cloud-aiplatform[agent_engines,adk]>=1.112",
-    "google-adk",
+    "google-cloud-aiplatform[agent_engines]>=1.112",
+    "google-adk>=2.1.0",
     "mcp",
     "pydantic>=2.0",
     "cloudpickle>=3.0",

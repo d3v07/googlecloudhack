@@ -4,8 +4,10 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from api.agent_engine import AgentEngineDiagnosisClient
 from api.routes import Engine, PackStore, get_engine, get_store, router
 from controller.persistence import load_pack, read_pack, save_pack, write_pack
+from controller.orchestrator import DiagnosisAdvisor
 from controller.schemas import EvidencePack
 
 
@@ -59,8 +61,11 @@ class _LiveEngine:  # pragma: no cover - live
     image) — never the agents/ layer. Narrator is off (the pack stays deterministic;
     narration would need Vertex IAM on the Cloud Run SA)."""
 
-    def __init__(self, connection_string: str) -> None:
+    def __init__(
+        self, connection_string: str, diagnosis_advisor: DiagnosisAdvisor | None = None
+    ) -> None:
         self._conn = connection_string
+        self._diagnosis_advisor = diagnosis_advisor
 
     def _backend(self):
         from controller.backends import PymongoBackend
@@ -81,6 +86,7 @@ class _LiveEngine:  # pragma: no cover - live
                 query_filter=QUERY_FILTER,
                 query_sort=QUERY_SORT,
                 limit=LIMIT,
+                advisor=self._diagnosis_advisor,
             )
         finally:
             backend.close()
@@ -116,7 +122,7 @@ def create_app(store: PackStore | None = None, engine: Engine | None = None) -> 
             collection = MongoClient(conn)["dbre_state"]["evidence_packs"]
             store = MongoPackStore(collection)
             if engine is None:
-                engine = _LiveEngine(conn)
+                engine = _LiveEngine(conn, AgentEngineDiagnosisClient.from_env())
         else:
             packs_dir = Path(os.getenv("PACKS_DIR", "runs"))
             store = LocalFilePackStore(packs_dir) if packs_dir.exists() else _EmptyPackStore()

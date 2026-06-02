@@ -21,6 +21,7 @@
 # USAGE:
 #   export GCP_PROJECT=performer-497915
 #   export MONGO_SECRET_NAME=mongodb-connection-string
+#   export AGENT_ENGINE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<id>
 #   bash deploy/deploy_cloudrun.sh
 
 set -euo pipefail
@@ -34,10 +35,16 @@ MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-mongodb-connection-string}"
 # Shared secret gating the write endpoints (POST /run, /decision). Reads stay public.
 # If empty, writes are UNAUTHENTICATED — set it: export RUN_API_TOKEN=$(openssl rand -hex 16)
 RUN_API_TOKEN="${RUN_API_TOKEN:-}"
+AGENT_ENGINE_RESOURCE="${AGENT_ENGINE_RESOURCE:-}"
 # ───────────────────────────────────────────────────────────────────────────────
 
 if [ -z "${RUN_API_TOKEN}" ]; then
   echo "WARNING: RUN_API_TOKEN is empty — POST /run and /decision will be UNAUTHENTICATED."
+fi
+if [ -z "${AGENT_ENGINE_RESOURCE}" ]; then
+  echo "ERROR: AGENT_ENGINE_RESOURCE is required so POST /run uses Agent Engine diagnosis."
+  echo "Set it to projects/<project-number>/locations/<region>/reasoningEngines/<id>."
+  exit 1
 fi
 
 echo "==> Granting Secret Manager accessor role to ${SERVICE_ACCOUNT}"
@@ -56,7 +63,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --project "${GCP_PROJECT}" \
   --allow-unauthenticated \
   --service-account "${SERVICE_ACCOUNT}" \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME},RUN_API_TOKEN=${RUN_API_TOKEN}" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME},RUN_API_TOKEN=${RUN_API_TOKEN},AGENT_ENGINE_RESOURCE=${AGENT_ENGINE_RESOURCE}" \
   --port 8080 \
   --min-instances 0 \
   --max-instances 3 \

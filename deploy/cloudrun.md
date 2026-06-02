@@ -56,6 +56,7 @@ Run from the **repo root**:
 ```bash
 export GCP_PROJECT=performer-497915
 export MONGO_SECRET_NAME=mongodb-connection-string
+export AGENT_ENGINE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/3211834543187165184
 export RUN_API_TOKEN=$(openssl rand -hex 16)   # gates the write endpoints; reads stay public
 bash deploy/deploy_cloudrun.sh
 ```
@@ -68,6 +69,10 @@ in the repo root and push the image to Artifact Registry automatically.
 > the script warns and the writes are unauthenticated. Reads (`/health`, `/packs`) are
 > always public. The dashboard must send the token (server-side proxy preferred over
 > exposing it in the client bundle).
+>
+> **Agent Engine:** `AGENT_ENGINE_RESOURCE` is required for deploy. `/run` uses that
+> resource as the diagnosis/rationale layer, then the deterministic controller validates
+> and emits the DIAGNOSED EvidencePack.
 
 ### What the script does
 
@@ -76,6 +81,7 @@ in the repo root and push the image to Artifact Registry automatically.
    - `GOOGLE_CLOUD_PROJECT=performer-497915` — used by the Secret Manager client
    - `MONGO_SECRET_NAME=mongodb-connection-string` — the secret name (not the value)
    - `RUN_API_TOKEN` — shared secret gating the write endpoints
+   - `AGENT_ENGINE_RESOURCE` — deployed Agent Engine used by `/run`
    - SA: `dbre-agent@performer-497915.iam.gserviceaccount.com`
    - 0–3 instances, 512 MiB, 1 vCPU
 3. Prints the live service URL.

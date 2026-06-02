@@ -10,7 +10,9 @@ happens ONLY after an explicit human approval.
 """
 
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Protocol
 
 from controller.backends import Backend
 from controller.diagnosis import diagnose
@@ -31,6 +33,26 @@ INDEX_B_NAME = "esr_wrong_B"
 INDEX_C_NAME = "esr_right_C"
 
 
+@dataclass(frozen=True)
+class DiagnosisAdvice:
+    source: str
+    narrative: str
+    proposed_index: tuple[tuple[str, int], ...] = ()
+
+
+class DiagnosisAdvisor(Protocol):
+    async def advise(
+        self,
+        *,
+        run_id: str,
+        namespace: str,
+        query_filter: dict,
+        query_sort: list[tuple[str, int]],
+        limit: int,
+        before,
+    ) -> DiagnosisAdvice: ...
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -48,6 +70,22 @@ def _recommended_index_name(recommendation: Recommendation) -> str:
     return f"gcrah_rec_{parts}"[:120]
 
 
+def _agent_phase_note(
+    advice: DiagnosisAdvice | None,
+    deterministic_index: tuple[tuple[str, int], ...],
+) -> str:
+    if advice is None:
+        return ""
+    if not advice.proposed_index:
+        return f"agent_engine={advice.source}; proposed_index=none"
+    if advice.proposed_index == deterministic_index:
+        return f"agent_engine={advice.source}; proposed_index=accepted"
+    return (
+        f"agent_engine={advice.source}; proposed_index=ignored; "
+        f"agent_proposed={list(advice.proposed_index)}"
+    )
+
+
 async def run_diagnosis(
     backend: Backend,
     run_id: str,
@@ -57,6 +95,7 @@ async def run_diagnosis(
     limit: int,
     created_at: str | None = None,
     narrator: Narrator | None = None,
+    advisor: DiagnosisAdvisor | None = None,
     current_index: str = INDEX_B_NAME,
 ) -> EvidencePack:
     """Read-only DIAGNOSE phase. Returns a DIAGNOSED pack with NO decision and NO mutation —
@@ -64,6 +103,18 @@ async def run_diagnosis(
     wrong index so the ESR blocking-sort trap is visible in the evidence."""
     created_at = created_at or _now()
     before = await backend.explain(query_filter, query_sort, limit, hint=current_index)
+    advice = (
+        await advisor.advise(
+            run_id=run_id,
+            namespace=namespace,
+            query_filter=query_filter,
+            query_sort=query_sort,
+            limit=limit,
+            before=before,
+        )
+        if advisor is not None
+        else None
+    )
     diagnosis = diagnose(
         query_filter,
         query_sort,
@@ -78,7 +129,14 @@ async def run_diagnosis(
         finding=diagnosis.finding,
         recommendation=diagnosis.recommendation,
         status=PackStatus.DIAGNOSED,
-        phase_log=[PhaseTransition(from_phase=None, to_phase=Phase.DIAGNOSE)],
+        phase_log=[
+            PhaseTransition(
+                from_phase=None,
+                to_phase=Phase.DIAGNOSE,
+                note=_agent_phase_note(advice, diagnosis.recommendation.index_spec),
+            )
+        ],
+        narrative=advice.narrative if advice is not None else None,
     )
     return await _maybe_narrate(pack, narrator)
 
