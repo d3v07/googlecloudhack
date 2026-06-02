@@ -32,7 +32,11 @@ def _staging_bucket(project: str) -> str:
 
 def _resource_name(remote_agent) -> str:
     api_resource = getattr(remote_agent, "api_resource", None)
-    return getattr(api_resource, "name", "") or getattr(remote_agent, "name", "")
+    return (
+        getattr(api_resource, "name", "")
+        or getattr(remote_agent, "resource_name", "")
+        or getattr(remote_agent, "name", "")
+    )
 
 
 def _agent_env_vars() -> dict[str, str | dict[str, str]]:

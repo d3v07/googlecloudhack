@@ -27,6 +27,17 @@ def test_resource_name_falls_back_to_name():
     assert _resource_name(_RemoteAgent()) == "fallback-resource"
 
 
+def test_resource_name_prefers_legacy_resource_name_before_short_name():
+    class _RemoteAgent:
+        api_resource = None
+        resource_name = "projects/p/locations/us-central1/reasoningEngines/123"
+        name = "123"
+
+    assert _resource_name(_RemoteAgent()) == (
+        "projects/p/locations/us-central1/reasoningEngines/123"
+    )
+
+
 def test_agent_engine_requirements_do_not_request_conflicting_adk_extra():
     assert "google-cloud-aiplatform[agent_engines]>=1.112" in _REQUIREMENTS
     assert all("[agent_engines,adk]" not in requirement for requirement in _REQUIREMENTS)
