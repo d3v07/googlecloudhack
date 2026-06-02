@@ -1,0 +1,52 @@
+{
+  "mode": "deterministic+demo-pack+live",
+  "summary": "9/9 checks passed",
+  "passed": true,
+  "checks": [
+    {
+      "name": "esr_correct",
+      "passed": true,
+      "detail": "recommended ESR index C: (('storeLocation', 1), ('saleDate', -1), ('customer.age', 1))"
+    },
+    {
+      "name": "phase_gate",
+      "passed": true,
+      "detail": "create-index blocked in diagnose=True, drop-index blocked in approve=True, create-index allowed in verify=True"
+    },
+    {
+      "name": "demo_pack",
+      "passed": true,
+      "detail": "loaded demo-001 (Gemini narrative present)"
+    },
+    {
+      "name": "esr_correct",
+      "passed": true,
+      "detail": "recommended ESR index C: (('storeLocation', 1), ('saleDate', -1), ('customer.age', 1))"
+    },
+    {
+      "name": "narrative_grounded",
+      "passed": true,
+      "detail": "mentions blocking sort=True; numbers cited=none; fabricated=none"
+    },
+    {
+      "name": "live_run",
+      "passed": true,
+      "detail": "POST /run returned status=diagnosed"
+    },
+    {
+      "name": "esr_correct",
+      "passed": true,
+      "detail": "recommended ESR index C: (('storeLocation', 1), ('saleDate', -1), ('customer.age', 1))"
+    },
+    {
+      "name": "narrative_grounded",
+      "passed": true,
+      "detail": "no narrative present (deterministic run) \u2014 skipped"
+    },
+    {
+      "name": "latency_recorded",
+      "passed": true,
+      "detail": "end-to-end 0.36s"
+    }
+  ]
+}
