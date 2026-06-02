@@ -5,7 +5,12 @@ import asyncio
 import pytest
 
 from controller.backends import FakeBackend
-from controller.orchestrator import apply_and_verify, reject_pack, run_diagnosis
+from controller.orchestrator import (
+    DiagnosisAdvice,
+    apply_and_verify,
+    reject_pack,
+    run_diagnosis,
+)
 from controller.pack import pack_evidence_hash
 from controller.phases import InvalidPhaseTransition, Phase, assert_phase_transition
 from controller.schemas import (
@@ -51,6 +56,32 @@ def _diagnose(backend: FakeBackend) -> EvidencePack:
             created_at=CREATED_AT,
         )
     )
+
+
+class _WrongAdvisor:
+    async def advise(self, **kwargs) -> DiagnosisAdvice:
+        return DiagnosisAdvice(
+            source="agent-engine-test",
+            narrative="Agent proposes the obvious but wrong index.",
+            proposed_index=(("storeLocation", 1), ("customer.age", 1), ("saleDate", -1)),
+        )
+
+
+class _NoIndexAdvisor:
+    async def advise(self, **kwargs) -> DiagnosisAdvice:
+        return DiagnosisAdvice(
+            source="agent-engine-test",
+            narrative="Agent explains the blocking sort without proposing keys.",
+        )
+
+
+class _CorrectAdvisor:
+    async def advise(self, **kwargs) -> DiagnosisAdvice:
+        return DiagnosisAdvice(
+            source="agent-engine-test",
+            narrative="Agent proposes the same ESR winner.",
+            proposed_index=(("storeLocation", 1), ("saleDate", -1), ("customer.age", 1)),
+        )
 
 
 def _apply(backend: FakeBackend, pack: EvidencePack) -> EvidencePack:
@@ -106,6 +137,65 @@ def test_diagnosis_created_at_defaults_to_now_when_not_provided():
         )
     )
     assert pack.created_at
+
+
+def test_agent_engine_advice_adds_narrative_without_changing_winner():
+    pack = asyncio.run(
+        run_diagnosis(
+            FakeBackend([_make_evidence(has_blocking_sort=True)]),
+            run_id=RUN_ID,
+            namespace=NAMESPACE,
+            query_filter=QUERY_FILTER,
+            query_sort=QUERY_SORT,
+            limit=LIMIT,
+            created_at=CREATED_AT,
+            advisor=_WrongAdvisor(),
+        )
+    )
+
+    assert pack.recommendation.index_spec == (
+        ("storeLocation", 1),
+        ("saleDate", -1),
+        ("customer.age", 1),
+    )
+    assert pack.evidence_hash == pack_evidence_hash(pack.before, pack.recommendation)
+    assert pack.narrative == "Agent proposes the obvious but wrong index."
+    assert "agent_engine=agent-engine-test" in pack.phase_log[0].note
+    assert "proposed_index=ignored" in pack.phase_log[0].note
+
+
+def test_agent_engine_note_records_no_proposal():
+    pack = asyncio.run(
+        run_diagnosis(
+            FakeBackend([_make_evidence(has_blocking_sort=True)]),
+            run_id=RUN_ID,
+            namespace=NAMESPACE,
+            query_filter=QUERY_FILTER,
+            query_sort=QUERY_SORT,
+            limit=LIMIT,
+            created_at=CREATED_AT,
+            advisor=_NoIndexAdvisor(),
+        )
+    )
+
+    assert pack.phase_log[0].note == "agent_engine=agent-engine-test; proposed_index=none"
+
+
+def test_agent_engine_note_records_matching_proposal_as_accepted():
+    pack = asyncio.run(
+        run_diagnosis(
+            FakeBackend([_make_evidence(has_blocking_sort=True)]),
+            run_id=RUN_ID,
+            namespace=NAMESPACE,
+            query_filter=QUERY_FILTER,
+            query_sort=QUERY_SORT,
+            limit=LIMIT,
+            created_at=CREATED_AT,
+            advisor=_CorrectAdvisor(),
+        )
+    )
+
+    assert pack.phase_log[0].note == "agent_engine=agent-engine-test; proposed_index=accepted"
 
 
 # --- apply_and_verify (post-approval mutation) ---

@@ -1,4 +1,4 @@
-from agents.deploy import _resource_name, _staging_bucket
+from agents.deploy import _REQUIREMENTS, _resource_name, _staging_bucket
 
 
 def test_staging_bucket_default_and_override(monkeypatch):
@@ -25,3 +25,9 @@ def test_resource_name_falls_back_to_name():
         name = "fallback-resource"
 
     assert _resource_name(_RemoteAgent()) == "fallback-resource"
+
+
+def test_agent_engine_requirements_do_not_request_conflicting_adk_extra():
+    assert "google-cloud-aiplatform[agent_engines]>=1.112" in _REQUIREMENTS
+    assert all("[agent_engines,adk]" not in requirement for requirement in _REQUIREMENTS)
+    assert "google-adk>=2.1.0" in _REQUIREMENTS
