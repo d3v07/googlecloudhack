@@ -15,16 +15,11 @@ import os
 from pathlib import Path
 
 from controller.backends import PymongoBackend
+from controller.demo_fixture import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
 from controller.narrate import Narrator
 from controller.orchestrator import run_remediation
 from controller.persistence import save_pack, write_pack
 from controller.schemas import EvidencePack
-
-DB = "sample_supplies"
-COLL = "sales_agent_demo"
-QUERY_FILTER = {"storeLocation": "Denver", "customer.age": {"$gte": 30, "$lte": 50}}
-QUERY_SORT = [("saleDate", -1)]
-LIMIT = 20
 
 # the deployed read API (#31) reads packs from here — persist so the dashboard renders
 STATE_DB = "dbre_state"

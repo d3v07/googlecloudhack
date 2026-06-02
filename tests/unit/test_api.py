@@ -417,3 +417,16 @@ def test_get_runner_raises_when_not_overridden() -> None:
     from api.routes import get_runner
     with pytest.raises(NotImplementedError):
         get_runner()
+
+
+def test_api_server_does_not_import_agents_layer() -> None:
+    """The read-API image packages only api/ + controller/ + contracts/ (see Dockerfile).
+    _LiveRunner must source the demo fixture from controller/, never agents/, or POST /run
+    raises ModuleNotFoundError in the container. Guards against re-coupling."""
+    import inspect
+
+    import api.server
+
+    src = inspect.getsource(api.server)
+    assert "from agents" not in src
+    assert "import agents" not in src
