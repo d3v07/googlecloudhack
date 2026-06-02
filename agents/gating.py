@@ -5,6 +5,7 @@ never run during diagnosis or while awaiting approval. Returning a dict from an 
 """
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from controller.phases import Phase
 
@@ -34,17 +35,21 @@ def is_allowed(phase: Phase, tool_name: str) -> bool:
     return tool_name in PHASE_ALLOWLIST[phase]
 
 
-def make_gate(phase: Phase):
-    allowed = PHASE_ALLOWLIST[phase]
+@dataclass(frozen=True)
+class PhaseToolGate:
+    phase: Phase
+    allowed: frozenset[str]
 
-    def before_tool_callback(tool, args, tool_context):
-        if tool.name not in allowed:
+    def __call__(self, tool, args, tool_context):
+        if tool.name not in self.allowed:
             return {
                 "blocked": True,
-                "phase": phase.value,
+                "phase": self.phase.value,
                 "tool": tool.name,
-                "reason": f"{tool.name} is not allowed in the '{phase.value}' phase",
+                "reason": f"{tool.name} is not allowed in the '{self.phase.value}' phase",
             }
         return None
 
-    return before_tool_callback
+
+def make_gate(phase: Phase) -> PhaseToolGate:
+    return PhaseToolGate(phase=phase, allowed=PHASE_ALLOWLIST[phase])
