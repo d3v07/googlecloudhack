@@ -1,3 +1,4 @@
+import asyncio
 import os
 from pathlib import Path
 from typing import Any
@@ -60,24 +61,30 @@ class _LiveRunner:  # pragma: no cover - live
 
     def __init__(self, connection_string: str) -> None:
         self._conn = connection_string
+        # serialize live runs within the instance — the deploy pins Cloud Run to
+        # max-instances=1 so this in-process lock fully serializes /run, which lets the
+        # pre-run sweep reclaim orphans without ever dropping a peer's in-flight scratch
+        self._lock = asyncio.Lock()
 
     async def run(self, run_id: str) -> EvidencePack:
         from agents.demo import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
         from controller.backends import PymongoBackend
-        from controller.orchestrator import run_remediation
+        from controller.orchestrator import INDEX_C_NAME, run_remediation
 
-        backend = PymongoBackend(self._conn, DB, COLL)
-        try:
-            return await run_remediation(
-                backend,
-                run_id=run_id,
-                namespace=f"{DB}.{COLL}",
-                query_filter=QUERY_FILTER,
-                query_sort=QUERY_SORT,
-                limit=LIMIT,
-            )
-        finally:
-            backend.close()
+        async with self._lock:
+            backend = PymongoBackend(self._conn, DB, COLL)
+            try:
+                await backend.drop_scratch_indexes(f"{INDEX_C_NAME}__scratch__")
+                return await run_remediation(
+                    backend,
+                    run_id=run_id,
+                    namespace=f"{DB}.{COLL}",
+                    query_filter=QUERY_FILTER,
+                    query_sort=QUERY_SORT,
+                    limit=LIMIT,
+                )
+            finally:
+                backend.close()
 
 
 def create_app(store: PackStore | None = None, runner: Runner | None = None) -> FastAPI:

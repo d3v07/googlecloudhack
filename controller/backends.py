@@ -72,6 +72,23 @@ class PymongoBackend:
 
         await asyncio.to_thread(_drop)
 
+    async def drop_scratch_indexes(self, prefix: str) -> None:  # pragma: no cover - live I/O
+        """Best-effort sweep of leftover scratch indexes (orphaned when a run is killed
+        between apply and the cleanup finally). run_id-scoped names don't self-heal, so
+        this reclaims them. Caller must serialize against live runs so a peer's in-flight
+        scratch index can't be dropped."""
+        from pymongo.errors import OperationFailure
+
+        def _sweep() -> None:
+            for name in list(self._coll.index_information().keys()):
+                if name.startswith(prefix):
+                    try:
+                        self._coll.drop_index(name)
+                    except OperationFailure:
+                        pass
+
+        await asyncio.to_thread(_sweep)
+
     def close(self) -> None:
         self._client.close()
 

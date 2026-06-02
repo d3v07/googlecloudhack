@@ -43,6 +43,8 @@ echo "==> Deploying ${SERVICE_NAME} to Cloud Run (${REGION})"
 # --source . uses the Dockerfile at the repo root via Cloud Build.
 # MONGO_SECRET_NAME is the secret's *name*, not its value — the app
 # reads the actual connection string from Secret Manager at runtime.
+# max-instances 1: POST /run serializes via an in-process asyncio.Lock, so a single
+# instance keeps that lock authoritative; concurrency 80 keeps reads responsive meanwhile.
 gcloud run deploy "${SERVICE_NAME}" \
   --source . \
   --region "${REGION}" \
@@ -52,7 +54,8 @@ gcloud run deploy "${SERVICE_NAME}" \
   --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME}" \
   --port 8080 \
   --min-instances 0 \
-  --max-instances 3 \
+  --max-instances 1 \
+  --concurrency 80 \
   --memory 512Mi \
   --cpu 1
 
