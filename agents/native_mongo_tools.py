@@ -26,8 +26,8 @@ def _require_connection_string() -> str:
     if conn:
         return conn
     raise RuntimeError(
-        "MongoDB connection unavailable: inject MONGODB_TARGET_URI from Secret Manager "
-        "for Agent Engine, or set MDB_MCP_CONNECTION_STRING locally."
+        "MongoDB connection unavailable: set MONGO_SECRET_NAME for Agent Engine "
+        "or MDB_MCP_CONNECTION_STRING locally."
     )
 
 

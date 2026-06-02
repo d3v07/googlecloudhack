@@ -13,12 +13,35 @@ from controller.schemas import Evidence, EvidenceMetrics
 _CONN_VARS = ("MDB_MCP_CONNECTION_STRING", "MONGODB_TARGET_URI")
 
 
+def _secret_project() -> str:
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCRAH_AGENT_PROJECT")
+    if project:
+        return project
+    raise RuntimeError(
+        "MongoDB secret project unavailable: set GOOGLE_CLOUD_PROJECT or GCRAH_AGENT_PROJECT"
+    )
+
+
+def _connection_string_from_secret() -> str | None:
+    secret_name = os.environ.get("MONGO_SECRET_NAME")
+    if not secret_name:
+        return None
+
+    from google.cloud import secretmanager  # noqa: PLC0415
+
+    version = os.environ.get("MONGO_SECRET_VERSION", "latest")
+    client = secretmanager.SecretManagerServiceClient()
+    path = f"projects/{_secret_project()}/secrets/{secret_name}/versions/{version}"
+    response = client.access_secret_version(name=path)
+    return response.payload.data.decode("utf-8")
+
+
 def get_connection_string() -> str | None:
     for var in _CONN_VARS:
         value = os.environ.get(var)
         if value:
             return value
-    return None
+    return _connection_string_from_secret()
 
 
 def walk_stages(plan: Mapping[str, Any]) -> list[str]:

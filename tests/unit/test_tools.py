@@ -223,11 +223,12 @@ def test_native_rationalize_recommendation_is_evidence_grounded(monkeypatch):
     assert payload["evidence"]["after_has_blocking_sort"] is False
 
 
-def test_native_connection_string_error_names_agent_engine_secret_env(monkeypatch):
+def test_native_connection_string_error_names_agent_engine_secret_name(monkeypatch):
     monkeypatch.delenv("MONGODB_TARGET_URI", raising=False)
     monkeypatch.delenv("MDB_MCP_CONNECTION_STRING", raising=False)
+    monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
 
-    with pytest.raises(RuntimeError, match="MONGODB_TARGET_URI"):
+    with pytest.raises(RuntimeError, match="MONGO_SECRET_NAME"):
         native_mongo_tools._require_connection_string()
 
 
