@@ -19,6 +19,10 @@ _READ_TOOLS = frozenset(
         "collection-indexes",
         "list-databases",
         "list-collections",
+        "explain_slow_query",
+        "compare_candidate_indexes",
+        "diagnose_candidate",
+        "rationalize_recommendation",
         "diagnose_index",
     }
 )
