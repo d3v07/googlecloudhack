@@ -21,6 +21,10 @@ from controller.schemas import (
 )
 
 
+class AgentDiagnosisParseError(ValueError):
+    """Raised when Agent Engine returns a response that cannot be parsed as diagnosis."""
+
+
 def _normalize_index_spec(value: Any) -> tuple[tuple[str, int], ...]:
     if not isinstance(value, list | tuple):
         return ()
@@ -264,4 +268,7 @@ class AgentEngineDiagnosisClient:
         async for event in remote.async_stream_query(user_id=run_id, message=prompt):
             chunks.append(_event_text(event))
             responses.extend(_event_function_responses(event))
-        return _diagnosis_from_events(self.resource_name, "".join(chunks), responses)
+        try:
+            return _diagnosis_from_events(self.resource_name, "".join(chunks), responses)
+        except ValueError as exc:
+            raise AgentDiagnosisParseError(str(exc)) from exc

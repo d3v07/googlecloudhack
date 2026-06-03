@@ -51,6 +51,7 @@ from evals.grade import (
     grade_no_mutation_before_approval,
     grade_phase_gate,
     grade_tokenless_writes_rejected,
+    rename_check,
 )
 
 # The #9 fixture query shape (the preset Denver/ESR demo).
@@ -132,9 +133,14 @@ def grade_live(card: Scorecard, api_url: str, token: str) -> dict | None:
 
     card.add("live_run", True, f"POST /run returned status={pack.get('status')}")
     rec = pack.get("recommendation", {})
-    card.checks.append(grade_esr_correct(rec.get("index_spec", [])))
-    card.checks.append(grade_narrative_grounded(pack.get("narrative")))
-    card.checks.append(grade_latency(elapsed))
+    card.checks.append(rename_check(grade_agent_engine_used(pack), "live_agent_engine_path"))
+    card.checks.append(
+        rename_check(grade_esr_correct(rec.get("index_spec", [])), "live_esr_correct")
+    )
+    card.checks.append(
+        rename_check(grade_narrative_grounded(pack.get("narrative")), "live_narrative_grounded")
+    )
+    card.checks.append(rename_check(grade_latency(elapsed), "live_latency"))
     return pack
 
 
@@ -223,17 +229,28 @@ def grade_demo_pack(card: Scorecard, api_url: str, pack_id: str = "demo-001") ->
         return None
 
     card.add("demo_pack", True, f"loaded {pack_id} (Gemini narrative present)")
-    card.checks.append(grade_esr_correct(pack.get("recommendation", {}).get("index_spec", [])))
-    card.checks.append(grade_narrative_grounded(pack.get("narrative")))
+    card.checks.append(
+        rename_check(
+            grade_esr_correct(pack.get("recommendation", {}).get("index_spec", [])),
+            "demo_pack_esr_correct",
+        )
+    )
+    card.checks.append(
+        rename_check(
+            grade_narrative_grounded(pack.get("narrative")),
+            "demo_pack_narrative_grounded",
+        )
+    )
     return pack
 
 
 def write_scorecard(card: Scorecard, mode: str) -> None:
+    checks = card.unique_checks
     payload = {
         "mode": mode,
         "summary": card.summary,
         "passed": card.passed,
-        "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail} for c in card.checks],
+        "checks": [{"name": c.name, "passed": c.passed, "detail": c.detail} for c in checks],
     }
     OUT_JSON.write_text(json.dumps(payload, indent=2) + "\n")
 
@@ -246,7 +263,7 @@ def write_scorecard(card: Scorecard, mode: str) -> None:
         "| Check | Result | Detail |",
         "|-------|--------|--------|",
     ]
-    for c in card.checks:
+    for c in checks:
         mark = "✅" if c.passed else "❌"
         lines.append(f"| `{c.name}` | {mark} | {c.detail} |")
     lines.append("")
@@ -306,7 +323,7 @@ def main() -> int:
 
     write_scorecard(card, mode)
     print(f"[{mode}] {card.summary} -> {'PASS' if card.passed else 'FAIL'}")
-    for c in card.checks:
+    for c in card.unique_checks:
         print(f"  {'PASS' if c.passed else 'FAIL'}  {c.name}: {c.detail}")
     print(f"\nwrote {OUT_JSON.name} + {OUT_MD.name}")
     return 0 if card.passed else 1

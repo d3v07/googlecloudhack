@@ -9,7 +9,7 @@ Four dimensions, each a `Check` with a pass/fail and a human-readable detail:
                          invents no other numbers. Catches hallucination.
   3. phase_gate        — a write tool (create-index/drop-index) is blocked
                          outside the verify phase.
-  4. latency_recorded  — end-to-end wall time was captured (graded live only).
+  4. latency           — end-to-end wall time was captured (graded live only).
 
 The grader takes already-computed inputs so it can be unit-tested with no DB,
 no model, and no network.
@@ -79,13 +79,26 @@ class Scorecard:
         self.checks.append(Check(name, passed, detail))
 
     @property
+    def unique_checks(self) -> tuple[Check, ...]:
+        seen: set[str] = set()
+        duplicates: list[str] = []
+        for check in self.checks:
+            if check.name in seen:
+                duplicates.append(check.name)
+            seen.add(check.name)
+        if duplicates:
+            raise ValueError(f"duplicate scorecard check names: {sorted(set(duplicates))}")
+        return tuple(self.checks)
+
+    @property
     def passed(self) -> bool:
-        return all(c.passed for c in self.checks)
+        return all(c.passed for c in self.unique_checks)
 
     @property
     def summary(self) -> str:
-        n_pass = sum(1 for c in self.checks if c.passed)
-        return f"{n_pass}/{len(self.checks)} checks passed"
+        checks = self.unique_checks
+        n_pass = sum(1 for c in checks if c.passed)
+        return f"{n_pass}/{len(checks)} checks passed"
 
 
 def _normalize_spec(spec) -> tuple[tuple[str, int], ...]:
@@ -101,6 +114,10 @@ def grade_esr_correct(index_spec) -> Check:
     if got == OBVIOUS_WRONG_B:
         return Check("esr_correct", False, f"fell for the obvious WRONG index B: {got}")
     return Check("esr_correct", False, f"unexpected index spec: {got}")
+
+
+def rename_check(check: Check, name: str) -> Check:
+    return Check(name, check.passed, check.detail)
 
 
 def grade_phase_gate() -> Check:
@@ -149,8 +166,8 @@ def grade_narrative_grounded(narrative: str | None) -> Check:
 
 def grade_latency(elapsed_s: float | None) -> Check:
     if elapsed_s is None:
-        return Check("latency_recorded", False, "no latency captured")
-    return Check("latency_recorded", True, f"end-to-end {elapsed_s:.2f}s")
+        return Check("latency", False, "no latency captured")
+    return Check("latency", True, f"end-to-end {elapsed_s:.2f}s")
 
 
 def grade_agent_engine_used(pack: dict) -> Check:
