@@ -21,7 +21,9 @@
 # USAGE:
 #   export GCP_PROJECT=performer-497915
 #   export MONGO_SECRET_NAME=mongodb-connection-string
-#   export AGENT_ENGINE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<id>
+#   export AGENT_ENGINE_DIAGNOSE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<id>
+#   export AGENT_ENGINE_CANDIDATE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<id>
+#   export AGENT_ENGINE_RATIONALE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<id>
 #   export RUN_API_TOKEN=$(openssl rand -hex 16)
 #   bash deploy/deploy_cloudrun.sh
 
@@ -36,7 +38,9 @@ MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-}"
 # Shared secret gating the write endpoints (POST /run, /decision). Reads stay public.
 # Required for production deploy: export RUN_API_TOKEN=$(openssl rand -hex 16)
 RUN_API_TOKEN="${RUN_API_TOKEN:-}"
-AGENT_ENGINE_RESOURCE="${AGENT_ENGINE_RESOURCE:-}"
+AGENT_ENGINE_DIAGNOSE_RESOURCE="${AGENT_ENGINE_DIAGNOSE_RESOURCE:-}"
+AGENT_ENGINE_CANDIDATE_RESOURCE="${AGENT_ENGINE_CANDIDATE_RESOURCE:-}"
+AGENT_ENGINE_RATIONALE_RESOURCE="${AGENT_ENGINE_RATIONALE_RESOURCE:-}"
 # ───────────────────────────────────────────────────────────────────────────────
 
 if [ -z "${RUN_API_TOKEN}" ]; then
@@ -44,9 +48,13 @@ if [ -z "${RUN_API_TOKEN}" ]; then
   echo "Set it with: export RUN_API_TOKEN=\$(openssl rand -hex 16)"
   exit 1
 fi
-if [ -z "${AGENT_ENGINE_RESOURCE}" ]; then
-  echo "ERROR: AGENT_ENGINE_RESOURCE is required so POST /run uses Agent Engine diagnosis."
-  echo "Set it to projects/<project-number>/locations/<region>/reasoningEngines/<id>."
+if [ -z "${AGENT_ENGINE_DIAGNOSE_RESOURCE}" ] || [ -z "${AGENT_ENGINE_CANDIDATE_RESOURCE}" ] || [ -z "${AGENT_ENGINE_RATIONALE_RESOURCE}" ]; then
+  echo "ERROR: all three split Agent Engine resources are required for production /run."
+  echo "Set AGENT_ENGINE_DIAGNOSE_RESOURCE, AGENT_ENGINE_CANDIDATE_RESOURCE, and AGENT_ENGINE_RATIONALE_RESOURCE."
+  exit 1
+fi
+if [ "${AGENT_ENGINE_DIAGNOSE_RESOURCE}" = "${AGENT_ENGINE_CANDIDATE_RESOURCE}" ] || [ "${AGENT_ENGINE_DIAGNOSE_RESOURCE}" = "${AGENT_ENGINE_RATIONALE_RESOURCE}" ] || [ "${AGENT_ENGINE_CANDIDATE_RESOURCE}" = "${AGENT_ENGINE_RATIONALE_RESOURCE}" ]; then
+  echo "ERROR: split Agent Engine resources must be three distinct deployed agents."
   exit 1
 fi
 if [ -z "${MONGO_SECRET_NAME}" ]; then
@@ -71,7 +79,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --project "${GCP_PROJECT}" \
   --allow-unauthenticated \
   --service-account "${SERVICE_ACCOUNT}" \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME},RUN_API_TOKEN=${RUN_API_TOKEN},AGENT_ENGINE_RESOURCE=${AGENT_ENGINE_RESOURCE}" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME},RUN_API_TOKEN=${RUN_API_TOKEN},AGENT_ENGINE_DIAGNOSE_RESOURCE=${AGENT_ENGINE_DIAGNOSE_RESOURCE},AGENT_ENGINE_CANDIDATE_RESOURCE=${AGENT_ENGINE_CANDIDATE_RESOURCE},AGENT_ENGINE_RATIONALE_RESOURCE=${AGENT_ENGINE_RATIONALE_RESOURCE}" \
   --port 8080 \
   --min-instances 0 \
   --max-instances 3 \

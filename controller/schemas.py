@@ -176,6 +176,8 @@ class AgentTraceEvent(BaseModel):
     actor: AgentTraceActor
     status: AgentTraceStatus
     summary: str = Field(min_length=1)
+    component: str | None = None
+    resource: str | None = None
     tool: str | None = None
     ledger_ref: str | None = None
 

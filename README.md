@@ -4,7 +4,7 @@ A Gemini-powered MongoDB performance engineer: detects slow queries, proposes ES
 indexes from real `explain` evidence, gates `apply` behind human approval, verifies the
 result, and ships a hashed evidence pack plus an internal event ledger for every fix.
 
-> **Status:** Day-5 — live Cloud Run demo with Agent Engine native diagnosis tools,
+> **Status:** Day-5 — live Cloud Run demo with split Agent Engine diagnosis roles,
 > deterministic validation, human-gated apply/verify, and Evidence Ledger collections.
 
 ## Architecture
@@ -15,13 +15,15 @@ three-phase safety engine (DIAGNOSE → APPROVE → VERIFY).
 Current production path:
 
 ```text
-Dashboard -> FastAPI Cloud Run (opens approval gate) -> Agent Engine native tools
+Dashboard -> FastAPI Cloud Run (opens approval gate)
+          -> Diagnose Agent Engine -> Candidate Agent Engine -> Rationale Agent Engine
           -> deterministic controller validates + emits DIAGNOSED EvidencePack
           -> /packs/{id}/decision hash-bound approval ticket
           -> apply + verify
 ```
 
-Agent Engine performs read-only Mongo diagnosis/rationale with Python-native tools.
+The three Agent Engine resources perform read-only Mongo diagnosis, candidate testing,
+and rationale generation with Python-native tools.
 Deterministic Python remains the safety authority: it recomputes the ESR winner, evidence
 hash, phase transitions, index apply, and verification. `/run` opens the approval gate
 before diagnosis and remains read-only; `/packs/{run_id}/decision` is the only path that

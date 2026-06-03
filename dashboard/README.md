@@ -35,9 +35,10 @@ The page loads a pack via [`lib/api.ts`](lib/api.ts) → `loadPack()`:
    to the committed `lib/example_pack.json` and shows a notice in the footer. A
    `live`/`fallback` chip in the header reflects which source rendered.
 
-This means it works today with zero config (fallback) and **auto-upgrades to live
-data** the moment `NEXT_PUBLIC_API_URL` points at the deployed read API (#31) —
-no component or contract changes.
+This means it works today with zero config (fallback) and switches to live data
+when `NEXT_PUBLIC_API_URL` points at the deployed read API (#31). Production live
+runs require Cloud Run to be configured with `AGENT_ENGINE_DIAGNOSE_RESOURCE`,
+`AGENT_ENGINE_CANDIDATE_RESOURCE`, and `AGENT_ENGINE_RATIONALE_RESOURCE`.
 
 | Env var | Purpose |
 |---------|---------|
@@ -73,7 +74,7 @@ app/
 components/
   ApprovalGatePanel first-viewport human gate + hash-bound approve/reject
   StageIndicator    Detect → Diagnose → Test → Approve → Verify
-  TracePanel        EvidencePack hash + Agent Engine/controller/human trace
+  TracePanel        EvidencePack hash + split Agent Engine/controller/human trace
   PlanPanel         before/after explain (keys examined, stage chain, sort flag)
   EvidencePanel     finding (severity) + recommendation (index spec + rationale)
 lib/
@@ -88,10 +89,11 @@ lib/
   approval with the required hash.
 - **Ask the agent** calls the same-origin `/api/run` proxy, which forwards to the
   Cloud Run API with the server-side token. The backend opens the approval gate
-  first, then asks Agent Engine for read-only diagnosis.
+  first, then asks the Diagnose, Candidate, and Rationale Agent Engine resources
+  for read-only diagnosis.
 - The returned pack is `diagnosed`, shown as **pending approval**. No database
   mutation happens during this step. `agent_trace` starts with `approval_gate/gate`,
-  then shows Agent Engine tool events plus deterministic validation.
+  then shows the split Agent Engine role events plus deterministic validation.
 - **Approve fix** posts the displayed `evidence_hash` through the same-origin
   decision proxy. The backend issues a one-time approval ticket and applies/verifies
   the index only after that hash-bound approval. If the API is not configured, the

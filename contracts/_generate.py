@@ -70,6 +70,8 @@ def _example_pack() -> EvidencePack:
                         actor=AgentTraceActor.AGENT_ENGINE,
                         status=AgentTraceStatus.OK,
                         summary="Agent Engine captured slow-query explain evidence.",
+                        component="diagnose_agent",
+                        resource="projects/example/locations/us-central1/reasoningEngines/diagnose",
                         tool="explain_slow_query",
                     ),
                     AgentTraceEvent(
@@ -77,6 +79,8 @@ def _example_pack() -> EvidencePack:
                         actor=AgentTraceActor.AGENT_ENGINE,
                         status=AgentTraceStatus.OK,
                         summary="Agent Engine compared candidates and selected esr_right_C.",
+                        component="candidate_agent",
+                        resource="projects/example/locations/us-central1/reasoningEngines/candidate",
                         tool="compare_candidate_indexes",
                     ),
                     AgentTraceEvent(
@@ -84,6 +88,8 @@ def _example_pack() -> EvidencePack:
                         actor=AgentTraceActor.AGENT_ENGINE,
                         status=AgentTraceStatus.OK,
                         summary="Agent Engine ran diagnose_candidate.",
+                        component="diagnose_agent",
+                        resource="projects/example/locations/us-central1/reasoningEngines/diagnose",
                         tool="diagnose_candidate",
                     ),
                     AgentTraceEvent(
@@ -91,6 +97,8 @@ def _example_pack() -> EvidencePack:
                         actor=AgentTraceActor.AGENT_ENGINE,
                         status=AgentTraceStatus.OK,
                         summary="Agent Engine produced an evidence-grounded rationale.",
+                        component="rationale_agent",
+                        resource="projects/example/locations/us-central1/reasoningEngines/rationale",
                         tool="rationalize_recommendation",
                     ),
                 ),

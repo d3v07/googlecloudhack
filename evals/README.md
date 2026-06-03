@@ -11,9 +11,9 @@ the demo/Devpost a concrete quality scorecard.
 | `esr_correct` | all | recommends ESR index **C** `{storeLocation:1, saleDate:-1, customer.age:1}`, **not** the obvious-but-wrong **B** |
 | `phase_gate` | deterministic | a write tool (`create-index`/`drop-index`) is blocked in diagnose/approve, allowed only in verify |
 | `narrative_grounded` | demo-pack | the **real Gemini narrative** cites the blocking sort and invents **no** numbers (catches hallucination) |
-| `live_run` + `latency_recorded` | live | the deployed agent answers `POST /run` and the round-trip is timed |
+| `live_run` + `live_agent_engine_path` + `live_latency` | live | the deployed `/run` path answers, proves the three Agent Engine roles, and records round-trip latency |
 | `approval_gate_first` | diagram-live | `/run` starts with an approval gate trace event and the pack is pending on the evidence hash |
-| `agent_engine_path` | diagram-live | `/run` records Agent Engine native tool events in `agent_trace` |
+| `agent_engine_path` | diagram-live | `/run` records Diagnose, Candidate, and Rationale Agent Engine events in `agent_trace` |
 | `no_mutation_before_approval` | diagram-live | target indexes are unchanged immediately after `/run` |
 | `approval_gate_ledger_records` | diagram-live | `/run` persisted `gate:opened` and `gate:pending` approval records |
 | `ledger_records_exist` | diagram-live | all diagram ledger collections have a deterministic record for the run, and diagnosis records are Agent Engine sourced |
@@ -39,8 +39,9 @@ uv run --with python-dotenv python -m dotenv run -- \
   uv run python -m evals.run_eval --demo-pack --diagram-live
 ```
 
-Outputs `evals/scorecard.json` + `evals/scorecard.md` (latest committed run:
-**PASS** across deterministic, demo-pack, live, and diagram-live gates).
+Outputs `evals/scorecard.json` + `evals/scorecard.md`. Treat those files as the
+record for the run that generated them; rerun the harness after changing gates,
+contracts, or live deployment inputs.
 
 ## Layers, and why
 
@@ -49,12 +50,12 @@ Outputs `evals/scorecard.json` + `evals/scorecard.md` (latest committed run:
 - **demo-pack** (read-only HTTP): grades the pre-seeded `demo-001` pack, the one
   pack that carries a real Gemini narrative — this is where anti-hallucination
   meets actual model output.
-- **live** (needs the write token): triggers the Agent Engine-backed `/run` path
-  and grades the returned pack. `/run` packs are deterministic-only (no narrative),
-  so `narrative_grounded` is correctly skipped there — the demo-pack layer covers
-  narrative grounding instead.
+- **live** (needs the write token): triggers the split Agent Engine-backed `/run`
+  path and grades the returned pack. It fails unless the Diagnose, Candidate, and
+  Rationale Agent Engine components and distinct resource ids are visible in
+  `agent_trace`.
 - **diagram-live** (needs the write token + Mongo connection): exercises the
-  shipped architecture end to end: gate-first trace, Agent Engine native tool
+  shipped architecture end to end: gate-first trace, split Agent Engine role
   participation, no mutation before approval, gate and Agent Engine-sourced ledger
   persistence, hash-bound approval ticket, verified ESR fix, token-gated writes,
   and clean target indexes.

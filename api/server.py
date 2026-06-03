@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from api.agent_engine import AgentDiagnosisParseError, AgentEngineDiagnosisClient
+from api.agent_engine import AgentDiagnosisParseError, diagnosis_agent_from_env
 from api.routes import Engine, PackStore, get_engine, get_store, router
 from controller.ledger_store import LedgerStore, MongoLedgerStore
 from controller.orchestrator import ApprovalTicket, DiagnosisAdvice, DiagnosisAgent
@@ -103,10 +103,12 @@ class _LiveEngine:  # pragma: no cover - live
         connection_string: str,
         diagnosis_agent: DiagnosisAgent | None = None,
         ledger: LedgerStore | None = None,
+        allow_agent_fallback: bool = False,
     ) -> None:
         self._conn = connection_string
         self._diagnosis_agent = diagnosis_agent
         self._ledger = ledger
+        self._allow_agent_fallback = allow_agent_fallback
 
     def _backend(self):
         from controller.backends import PymongoBackend
@@ -131,6 +133,8 @@ class _LiveEngine:  # pragma: no cover - live
                     ledger=self._ledger,
                 )
             except AgentDiagnosisParseError as exc:
+                if not self._allow_agent_fallback:
+                    raise
                 agent_failure = exc
 
         backend = self._backend()
@@ -197,7 +201,9 @@ def create_app(store: PackStore | None = None, engine: Engine | None = None) -> 
             store = MongoPackStore(collection)
             if engine is None:
                 engine = _LiveEngine(
-                    conn, AgentEngineDiagnosisClient.from_env(), MongoLedgerStore(state_db)
+                    conn,
+                    diagnosis_agent_from_env(require_split=True, allow_legacy=False),
+                    MongoLedgerStore(state_db),
                 )
         else:
             packs_dir = Path(os.getenv("PACKS_DIR", "runs"))

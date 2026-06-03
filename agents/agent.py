@@ -4,6 +4,7 @@ ESR tool, under a phase gate. Model and connection come from the environment onl
 
 import os
 from collections.abc import Sequence
+from enum import StrEnum
 from typing import Any
 
 from google.adk.agents import Agent
@@ -23,12 +24,35 @@ from controller.phases import Phase
 # dev/CI default stays cheap; the demo runs gemini-3-flash-preview at location=global
 MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-INSTRUCTION = (
-    "You are a MongoDB performance engineer. Use the native Mongo tools to read the "
-    "slow query, compare candidates, diagnose the ESR-correct index, and explain the "
-    "rationale. Return compact JSON with evidence, candidates, experiments, "
-    "recommended_index, and rationale. Never create or drop an index during diagnosis."
-)
+
+class AgentRole(StrEnum):
+    FULL = "full"
+    DIAGNOSE = "diagnose"
+    CANDIDATE = "candidate"
+    RATIONALE = "rationale"
+
+
+INSTRUCTIONS = {
+    AgentRole.FULL: (
+        "You are a MongoDB performance engineer. Use the native Mongo tools to read the "
+        "slow query, compare candidates, diagnose the ESR-correct index, and explain the "
+        "rationale. Return compact JSON with evidence, candidates, experiments, "
+        "recommended_index, and rationale. Never create or drop an index during diagnosis."
+    ),
+    AgentRole.DIAGNOSE: (
+        "You are the Diagnose Agent. Run explain_slow_query and diagnose_candidate. "
+        "Return compact JSON with before evidence, diagnosis, and recommended_index. "
+        "Never create or drop an index."
+    ),
+    AgentRole.CANDIDATE: (
+        "You are the Candidate Agent. Run compare_candidate_indexes. Return compact JSON "
+        "with candidate metrics and the winner. Never create or drop an index."
+    ),
+    AgentRole.RATIONALE: (
+        "You are the Rationale Agent. Run rationalize_recommendation. Return compact JSON "
+        "with recommended_index and rationale grounded in evidence. Never create or drop an index."
+    ),
+}
 
 NATIVE_TOOL_FUNCTIONS = (
     explain_slow_query,
@@ -36,6 +60,13 @@ NATIVE_TOOL_FUNCTIONS = (
     diagnose_candidate,
     rationalize_recommendation,
 )
+
+ROLE_TOOL_FUNCTIONS = {
+    AgentRole.FULL: (*NATIVE_TOOL_FUNCTIONS, diagnose_index),
+    AgentRole.DIAGNOSE: (explain_slow_query, diagnose_candidate),
+    AgentRole.CANDIDATE: (compare_candidate_indexes,),
+    AgentRole.RATIONALE: (rationalize_recommendation,),
+}
 
 
 def build_mcp_toolset(
@@ -61,17 +92,18 @@ def build_mcp_toolset(
     )
 
 
-def build_agent(phase: Phase = Phase.DIAGNOSE, extra_tools: Sequence[Any] = ()) -> Agent:
-    tools: list[Any] = [
-        *(FunctionTool(tool) for tool in NATIVE_TOOL_FUNCTIONS),
-        FunctionTool(diagnose_index),
-        *extra_tools,
-    ]
+def build_agent(
+    phase: Phase = Phase.DIAGNOSE,
+    extra_tools: Sequence[Any] = (),
+    role: AgentRole | str = AgentRole.FULL,
+) -> Agent:
+    role = AgentRole(role)
+    tools: list[Any] = [*(FunctionTool(tool) for tool in ROLE_TOOL_FUNCTIONS[role]), *extra_tools]
     return Agent(
-        name="dbre_agent",
+        name=f"dbre_{role.value}_agent",
         model=MODEL,
         tools=tools,
-        instruction=INSTRUCTION,
+        instruction=INSTRUCTIONS[role],
         before_tool_callback=make_gate(phase),
     )
 

@@ -75,6 +75,8 @@ export interface AgentTraceEvent {
   actor: AgentTraceActor;
   status: AgentTraceStatus;
   summary: string;
+  component: string | null;
+  resource: string | null;
   tool: string | null;
   ledger_ref: string | null;
 }
