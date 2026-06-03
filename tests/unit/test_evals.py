@@ -4,6 +4,7 @@ The deterministic graders are pure, so they run everywhere. The live agent run
 is exercised only when RUN_API_TOKEN + API_URL are set (skipped in CI).
 """
 
+import json
 import os
 
 import pytest
@@ -26,6 +27,7 @@ from evals.grade import (
     grade_no_mutation_before_approval,
     grade_phase_gate,
     grade_tokenless_writes_rejected,
+    rename_check,
 )
 
 
@@ -60,6 +62,72 @@ def test_scorecard_summary_and_passed_state():
     assert card.summary == "1/2 checks passed"
 
 
+def test_scorecard_rejects_duplicate_check_names():
+    card = Scorecard()
+    card.add("same", True, "first")
+    card.add("same", True, "second")
+
+    with pytest.raises(ValueError, match="duplicate scorecard check names"):
+        _ = card.summary
+
+
+def test_rename_check_preserves_result_and_detail():
+    original = grade_esr_correct(ESR_CORRECT_C)
+    renamed = rename_check(original, "demo_pack_esr_correct")
+
+    assert renamed.name == "demo_pack_esr_correct"
+    assert renamed.passed is original.passed
+    assert renamed.detail == original.detail
+
+
+def test_write_scorecard_serializes_unique_renamed_checks(tmp_path, monkeypatch):
+    from evals import run_eval
+
+    monkeypatch.setattr(run_eval, "OUT_JSON", tmp_path / "scorecard.json")
+    monkeypatch.setattr(run_eval, "OUT_MD", tmp_path / "scorecard.md")
+    card = Scorecard()
+    card.checks.append(rename_check(grade_latency(1.25), "live_latency"))
+    card.checks.append(grade_latency(2.5))
+
+    run_eval.write_scorecard(card, "live+diagram-live")
+
+    payload = json.loads((tmp_path / "scorecard.json").read_text())
+    names = [check["name"] for check in payload["checks"]]
+    assert names == ["live_latency", "latency"]
+    assert payload["summary"] == "2/2 checks passed"
+    assert "`live_latency`" in (tmp_path / "scorecard.md").read_text()
+    assert "`latency`" in (tmp_path / "scorecard.md").read_text()
+
+
+def test_grade_live_requires_agent_engine_tool_trace(monkeypatch):
+    from evals import run_eval
+
+    def _fake_live_run(api_url, token):
+        return (
+            {
+                "status": "diagnosed",
+                "recommendation": {
+                    "index_spec": [["storeLocation", 1], ["saleDate", -1], ["customer.age", 1]]
+                },
+                "agent_trace": [
+                    {"actor": "agent_engine", "tool": "explain_slow_query"},
+                    {"actor": "agent_engine", "tool": "compare_candidate_indexes"},
+                    {"actor": "agent_engine", "tool": "diagnose_candidate"},
+                    {"actor": "agent_engine", "tool": "rationalize_recommendation"},
+                ],
+            },
+            1.25,
+        )
+
+    monkeypatch.setattr(run_eval, "trigger_live_run", _fake_live_run)
+    card = Scorecard()
+
+    assert run_eval.grade_live(card, "https://api.example", "token") is not None
+    checks = {check.name: check for check in card.unique_checks}
+    assert checks["live_agent_engine_path"].passed
+    assert checks["live_latency"].passed
+
+
 def test_phase_gate_blocks_writes_outside_verify():
     assert grade_phase_gate().passed
 
@@ -90,6 +158,7 @@ def test_narrative_grounded_tolerates_missing_narrative():
 
 
 def test_latency_recorded():
+    assert grade_latency(1.5).name == "latency"
     assert grade_latency(1.5).passed
     assert not grade_latency(None).passed
 

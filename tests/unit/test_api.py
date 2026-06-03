@@ -3,12 +3,17 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from api.agent_engine import AgentDiagnosisParseError
 from api.server import LocalFilePackStore, MongoPackStore, _EmptyPackStore, _LiveEngine, create_app
+from controller.backends import FakeBackend
 from controller.orchestrator import AgentDiagnosisResult
+from controller.pack import pack_evidence_hash
 from controller.ledger import evidence_hash as compute_hash
 from controller.persistence import write_pack
 from controller.phases import Phase
 from controller.schemas import (
+    AgentTraceActor,
+    AgentTraceStatus,
     ApprovalGate,
     ApprovalGateState,
     Decision,
@@ -476,6 +481,74 @@ def test_live_engine_uses_agent_engine_before_local_backend_when_configured() ->
     assert pack.agent_trace[0].actor.value == "approval_gate"
     assert pack.agent_trace[-2].actor.value == "deterministic_controller"
     assert pack.agent_trace[-1].actor.value == "approval_gate"
+
+
+def test_live_engine_falls_back_when_agent_engine_returns_invalid_output() -> None:
+    evidence = Evidence(
+        query={"filter": {"storeLocation": "Denver"}},
+        explain_plan={"stage": "FETCH"},
+        metrics=EvidenceMetrics(
+            docs_examined=20,
+            docs_returned=20,
+            millis=8,
+            total_keys_examined=17209,
+            stages=("FETCH", "SORT", "IXSCAN"),
+        ),
+    )
+
+    class _InvalidAgent:
+        resource_name = "agent-engine-test"
+
+        async def diagnose(self, **kwargs) -> AgentDiagnosisResult:
+            raise AgentDiagnosisParseError("Agent Engine diagnosis did not return before evidence")
+
+    class _FallbackEngine(_LiveEngine):
+        def __init__(self) -> None:
+            super().__init__("unused", diagnosis_agent=_InvalidAgent())
+            self.backend = FakeBackend([evidence])
+
+        def _backend(self):
+            return self.backend
+
+    import asyncio
+
+    engine = _FallbackEngine()
+    pack = asyncio.run(engine.diagnose("agent-fallback-run"))
+
+    assert pack.status is PackStatus.DIAGNOSED
+    assert pack.before == evidence
+    assert pack.recommendation.index_spec == (
+        ("storeLocation", 1),
+        ("saleDate", -1),
+        ("customer.age", 1),
+    )
+    assert pack.evidence_hash == pack_evidence_hash(pack.before, pack.recommendation)
+    assert engine.backend.applied_indexes == []
+    assert any(
+        event.actor is AgentTraceActor.AGENT_ENGINE
+        and event.status is AgentTraceStatus.FAILED
+        and event.tool == "agent_engine_diagnose"
+        for event in pack.agent_trace
+    )
+    assert pack.agent_trace[-2].status is AgentTraceStatus.DRIFT
+    assert pack.agent_trace[-1].actor.value == "approval_gate"
+
+
+def test_live_engine_does_not_mask_non_parse_agent_engine_failures() -> None:
+    class _BrokenAgent:
+        async def diagnose(self, **kwargs) -> AgentDiagnosisResult:
+            raise RuntimeError("permission denied")
+
+    class _NoFallbackEngine(_LiveEngine):
+        def _backend(self):
+            raise AssertionError("fallback must not run for non-parse failures")
+
+    import asyncio
+
+    engine = _NoFallbackEngine("unused", diagnosis_agent=_BrokenAgent())
+
+    with pytest.raises(RuntimeError, match="permission denied"):
+        asyncio.run(engine.diagnose("agent-auth-failure"))
 
 
 # --- save_pack store-level tests ---

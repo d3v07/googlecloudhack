@@ -1,6 +1,6 @@
 {
-  "mode": "deterministic",
-  "summary": "2/2 checks passed",
+  "mode": "deterministic+demo-pack+live+diagram-live",
+  "summary": "20/20 checks passed",
   "passed": true,
   "checks": [
     {
@@ -12,6 +12,96 @@
       "name": "phase_gate",
       "passed": true,
       "detail": "create-index blocked in diagnose=True, drop-index blocked in approve=True, create-index allowed in verify=True"
+    },
+    {
+      "name": "demo_pack",
+      "passed": true,
+      "detail": "loaded demo-001 (Gemini narrative present)"
+    },
+    {
+      "name": "demo_pack_esr_correct",
+      "passed": true,
+      "detail": "recommended ESR index C: (('storeLocation', 1), ('saleDate', -1), ('customer.age', 1))"
+    },
+    {
+      "name": "demo_pack_narrative_grounded",
+      "passed": true,
+      "detail": "mentions blocking sort=True; numbers cited=[17209]; fabricated=none"
+    },
+    {
+      "name": "live_run",
+      "passed": true,
+      "detail": "POST /run returned status=diagnosed"
+    },
+    {
+      "name": "live_agent_engine_path",
+      "passed": true,
+      "detail": "Agent Engine tool trace present: ['compare_candidate_indexes', 'diagnose_candidate', 'explain_slow_query', 'rationalize_recommendation']"
+    },
+    {
+      "name": "live_esr_correct",
+      "passed": true,
+      "detail": "recommended ESR index C: (('storeLocation', 1), ('saleDate', -1), ('customer.age', 1))"
+    },
+    {
+      "name": "live_narrative_grounded",
+      "passed": true,
+      "detail": "mentions blocking sort=True; numbers cited=[17209]; fabricated=none"
+    },
+    {
+      "name": "live_latency",
+      "passed": true,
+      "detail": "end-to-end 25.97s"
+    },
+    {
+      "name": "diagram_live",
+      "passed": true,
+      "detail": "completed run_id=eval-diagram-1780505191"
+    },
+    {
+      "name": "approval_gate_first",
+      "passed": true,
+      "detail": "first trace event is approval_gate/gate and gate is pending on the pack hash"
+    },
+    {
+      "name": "agent_engine_path",
+      "passed": true,
+      "detail": "Agent Engine tool trace present: ['compare_candidate_indexes', 'diagnose_candidate', 'explain_slow_query', 'rationalize_recommendation']"
+    },
+    {
+      "name": "no_mutation_before_approval",
+      "passed": true,
+      "detail": "target indexes unchanged after /run"
+    },
+    {
+      "name": "approval_gate_ledger_records",
+      "passed": true,
+      "detail": "gate-opened and gate-pending ledger records exist"
+    },
+    {
+      "name": "ledger_records_exist",
+      "passed": true,
+      "detail": "all expected collections present with Agent Engine sources: ['applications', 'approvals', 'candidates', 'decisions', 'evidence_packs', 'experiments', 'slow_queries', 'verifications']"
+    },
+    {
+      "name": "approval_verifies_esr_fix",
+      "passed": true,
+      "detail": "diagnosed=diagnosed; verified=verified; hash_unchanged=True; keys=17209->64; sort_after=False"
+    },
+    {
+      "name": "no_extra_indexes",
+      "passed": true,
+      "detail": "target indexes clean: ['_id_', 'esr_right_C', 'esr_wrong_B']"
+    },
+    {
+      "name": "tokenless_writes_rejected",
+      "passed": true,
+      "detail": "POST /run=401; POST /decision=401"
+    },
+    {
+      "name": "latency",
+      "passed": true,
+      "detail": "end-to-end 22.87s"
     }
   ]
 }

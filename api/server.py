@@ -4,12 +4,18 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from api.agent_engine import AgentEngineDiagnosisClient
+from api.agent_engine import AgentDiagnosisParseError, AgentEngineDiagnosisClient
 from api.routes import Engine, PackStore, get_engine, get_store, router
 from controller.ledger_store import LedgerStore, MongoLedgerStore
-from controller.orchestrator import ApprovalTicket, DiagnosisAgent
+from controller.orchestrator import ApprovalTicket, DiagnosisAdvice, DiagnosisAgent
 from controller.persistence import load_pack, read_pack, save_pack, write_pack
-from controller.schemas import EvidencePack
+from controller.schemas import (
+    AgentTraceActor,
+    AgentTraceEvent,
+    AgentTraceStage,
+    AgentTraceStatus,
+    EvidencePack,
+)
 
 
 class MongoPackStore:
@@ -53,6 +59,36 @@ class _EmptyPackStore:
         raise NotImplementedError("_EmptyPackStore cannot persist packs")
 
 
+class _AgentFailureAdvisor:
+    def __init__(self, agent: DiagnosisAgent, error: Exception) -> None:
+        self._source = str(getattr(agent, "resource_name", agent.__class__.__name__))
+        self._error_type = type(error).__name__
+
+    async def advise(self, **kwargs) -> DiagnosisAdvice:
+        before = kwargs["before"]
+        narrative = (
+            "Agent Engine diagnosis failed validation; deterministic controller used live "
+            f"explain evidence with {before.metrics.total_keys_examined} keys and "
+            f"blocking_sort={before.metrics.has_blocking_sort}."
+        )
+        return DiagnosisAdvice(
+            source=self._source,
+            narrative=narrative,
+            trace=(
+                AgentTraceEvent(
+                    stage=AgentTraceStage.DIAGNOSE,
+                    actor=AgentTraceActor.AGENT_ENGINE,
+                    status=AgentTraceStatus.FAILED,
+                    tool="agent_engine_diagnose",
+                    summary=(
+                        "Agent Engine diagnosis output failed validation "
+                        f"({self._error_type}); deterministic fallback used."
+                    ),
+                ),
+            ),
+        )
+
+
 class _LiveEngine:  # pragma: no cover - live
     """Runs the remediation phases over the preset demo fixture against the live target
     collection. diagnose() is read-only; apply_and_verify() performs the human-approved
@@ -82,16 +118,20 @@ class _LiveEngine:  # pragma: no cover - live
         from controller.demo_fixture import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
         from controller.orchestrator import run_agent_diagnosis, run_diagnosis
 
+        agent_failure: Exception | None = None
         if self._diagnosis_agent is not None:
-            return await run_agent_diagnosis(
-                self._diagnosis_agent,
-                run_id=run_id,
-                namespace=f"{DB}.{COLL}",
-                query_filter=QUERY_FILTER,
-                query_sort=QUERY_SORT,
-                limit=LIMIT,
-                ledger=self._ledger,
-            )
+            try:
+                return await run_agent_diagnosis(
+                    self._diagnosis_agent,
+                    run_id=run_id,
+                    namespace=f"{DB}.{COLL}",
+                    query_filter=QUERY_FILTER,
+                    query_sort=QUERY_SORT,
+                    limit=LIMIT,
+                    ledger=self._ledger,
+                )
+            except AgentDiagnosisParseError as exc:
+                agent_failure = exc
 
         backend = self._backend()
         try:
@@ -102,6 +142,11 @@ class _LiveEngine:  # pragma: no cover - live
                 query_filter=QUERY_FILTER,
                 query_sort=QUERY_SORT,
                 limit=LIMIT,
+                advisor=(
+                    _AgentFailureAdvisor(self._diagnosis_agent, agent_failure)
+                    if self._diagnosis_agent is not None and agent_failure is not None
+                    else None
+                ),
                 ledger=self._ledger,
             )
         finally:
