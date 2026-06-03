@@ -27,16 +27,19 @@ from controller.ledger_store import (
     record_id,
     write_application_records,
     write_diagnosis_records,
+    write_gate_opened_record,
     write_rejection_records,
 )
 from controller.narrate import Narrator
-from controller.pack import build_pack
+from controller.pack import build_pack, pack_evidence_hash
 from controller.phases import Phase, assert_phase_transition
 from controller.schemas import (
     AgentTraceActor,
     AgentTraceEvent,
     AgentTraceStage,
     AgentTraceStatus,
+    ApprovalGate,
+    ApprovalGateState,
     Decision,
     DecisionAction,
     Evidence,
@@ -66,6 +69,15 @@ class AgentDiagnosisResult:
     narrative: str
     proposed_index: tuple[tuple[str, int], ...] = ()
     trace: tuple[AgentTraceEvent, ...] = ()
+
+
+@dataclass(frozen=True)
+class ApprovalTicket:
+    run_id: str
+    evidence_hash: str
+    approver: str
+    note: str
+    gate_id: str
 
 
 class DiagnosisAdvisor(Protocol):
@@ -130,6 +142,85 @@ def _ledger_ref(collection: str, run_id: str, event: str) -> str:
     return f"{collection}/{record_id(run_id, event)}"
 
 
+def _gate_id(run_id: str) -> str:
+    return record_id(run_id, "gate")
+
+
+def _gate_ledger_ref(run_id: str, event: str) -> str:
+    return _ledger_ref(APPROVALS, run_id, f"gate:{event}")
+
+
+def _approval_gate(
+    *,
+    run_id: str,
+    state: ApprovalGateState,
+    required_hash: str | None,
+    approved_hash: str | None = None,
+    approver: str | None = None,
+    ledger_event: str,
+    ledger_ref: str | None = None,
+) -> ApprovalGate:
+    return ApprovalGate(
+        gate_id=_gate_id(run_id),
+        state=state,
+        required_hash=required_hash,
+        approved_hash=approved_hash,
+        approver=approver,
+        mutation_allowed=False,
+        ledger_ref=ledger_ref or _gate_ledger_ref(run_id, ledger_event),
+    )
+
+
+def _gate_trace(run_id: str, event: str, summary: str) -> AgentTraceEvent:
+    return AgentTraceEvent(
+        stage=AgentTraceStage.GATE,
+        actor=AgentTraceActor.APPROVAL_GATE,
+        status=AgentTraceStatus.OK,
+        summary=summary,
+        tool="approval_gate",
+        ledger_ref=_gate_ledger_ref(run_id, event),
+    )
+
+
+def issue_approval_ticket(
+    pack: EvidencePack,
+    *,
+    evidence_hash: str,
+    approver: str,
+    note: str = "",
+) -> ApprovalTicket:
+    if pack.status is not PackStatus.DIAGNOSED:
+        raise ValueError(f"can only approve a DIAGNOSED pack, got '{pack.status}'")
+    if pack.approval_gate is None:
+        raise ValueError("approval ticket requires a pack with an approval gate")
+    if pack.approval_gate.state is not ApprovalGateState.PENDING_APPROVAL:
+        raise ValueError("approval ticket requires a pending approval gate")
+    if pack.approval_gate.required_hash != evidence_hash:
+        raise ValueError("approval ticket hash does not match the pending approval gate")
+    if pack.evidence_hash != evidence_hash:
+        raise ValueError("approval ticket hash does not match the pack evidence hash")
+    return ApprovalTicket(
+        run_id=pack.run_id,
+        evidence_hash=evidence_hash,
+        approver=approver,
+        note=note,
+        gate_id=pack.approval_gate.gate_id,
+    )
+
+
+def _assert_ticket_allows_apply(pack: EvidencePack, ticket: ApprovalTicket) -> None:
+    if pack.approval_gate is None:
+        raise ValueError("approval ticket requires a pack with an approval gate")
+    if ticket.run_id != pack.run_id:
+        raise ValueError("approval ticket run_id does not match the pack")
+    if ticket.gate_id != pack.approval_gate.gate_id:
+        raise ValueError("approval ticket gate_id does not match the pack")
+    if ticket.evidence_hash != pack.evidence_hash:
+        raise ValueError("approval ticket hash does not match the pack evidence hash")
+    if pack.approval_gate.state is not ApprovalGateState.PENDING_APPROVAL:
+        raise ValueError("approval ticket requires a pending approval gate")
+
+
 def _validation_trace(
     *,
     source: str,
@@ -166,23 +257,50 @@ def _diagnosis_trace(
     run_id: str,
     result: AgentDiagnosisResult | None,
     deterministic_index: tuple[tuple[str, int], ...],
+    evidence_hash: str,
 ) -> tuple[AgentTraceEvent, ...]:
+    trace: list[AgentTraceEvent] = [
+        _gate_trace(run_id, "opened", "Approval gate opened before diagnosis.")
+    ]
     if result is None:
-        return ()
+        trace.append(
+            AgentTraceEvent(
+                stage=AgentTraceStage.DIAGNOSE,
+                actor=AgentTraceActor.DETERMINISTIC_CONTROLLER,
+                status=AgentTraceStatus.OK,
+                summary="Deterministic controller produced the local diagnosis.",
+                tool="diagnose",
+            )
+        )
+        trace.append(
+            _gate_trace(
+                run_id,
+                "pending",
+                f"Approval gate is pending for evidence hash {evidence_hash[:12]}.",
+            )
+        )
+        return tuple(trace)
     refs = {
         AgentTraceStage.DETECT: _ledger_ref(SLOW_QUERIES, run_id, "diagnose:slow_query"),
         AgentTraceStage.CANDIDATE: _ledger_ref(CANDIDATES, run_id, "diagnose:candidate"),
         AgentTraceStage.DIAGNOSE: _ledger_ref(EXPERIMENTS, run_id, "diagnose:before"),
     }
-    trace = [
+    trace.extend(
         event.model_copy(update={"ledger_ref": event.ledger_ref or refs.get(event.stage)})
         for event in result.trace
-    ]
+    )
     trace.append(
         _validation_trace(
             source=result.source,
             proposed_index=result.proposed_index,
             deterministic_index=deterministic_index,
+        )
+    )
+    trace.append(
+        _gate_trace(
+            run_id,
+            "pending",
+            f"Approval gate is pending for evidence hash {evidence_hash[:12]}.",
         )
     )
     return tuple(trace)
@@ -205,6 +323,12 @@ async def run_diagnosis(
     the human approves (via the API) before anything is applied. The before-explain hints the
     wrong index so the ESR blocking-sort trap is visible in the evidence."""
     created_at = created_at or _now()
+    write_gate_opened_record(
+        ledger,
+        run_id=run_id,
+        namespace=namespace,
+        created_at=created_at,
+    )
     before = await backend.explain(query_filter, query_sort, limit, hint=current_index)
     advice = (
         await advisor.advise(
@@ -224,6 +348,7 @@ async def run_diagnosis(
         has_blocking_sort=before.metrics.has_blocking_sort,
         current_index=current_index,
     )
+    pack_hash = pack_evidence_hash(before, diagnosis.recommendation)
     pack = build_pack(
         run_id=run_id,
         namespace=namespace,
@@ -252,6 +377,13 @@ async def run_diagnosis(
                 trace=advice.trace,
             ),
             deterministic_index=diagnosis.recommendation.index_spec,
+            evidence_hash=pack_hash,
+        ),
+        approval_gate=_approval_gate(
+            run_id=run_id,
+            state=ApprovalGateState.PENDING_APPROVAL,
+            required_hash=pack_hash,
+            ledger_event="pending",
         ),
     )
     pack = await _maybe_narrate(pack, narrator)
@@ -280,6 +412,12 @@ async def run_agent_diagnosis(
     current_index: str = INDEX_B_NAME,
 ) -> EvidencePack:
     created_at = created_at or _now()
+    write_gate_opened_record(
+        ledger,
+        run_id=run_id,
+        namespace=namespace,
+        created_at=created_at,
+    )
     result = await agent.diagnose(
         run_id=run_id,
         namespace=namespace,
@@ -293,6 +431,7 @@ async def run_agent_diagnosis(
         has_blocking_sort=result.before.metrics.has_blocking_sort,
         current_index=current_index,
     )
+    pack_hash = pack_evidence_hash(result.before, diagnosis.recommendation)
     pack = build_pack(
         run_id=run_id,
         namespace=namespace,
@@ -312,6 +451,13 @@ async def run_agent_diagnosis(
             run_id=run_id,
             result=result,
             deterministic_index=diagnosis.recommendation.index_spec,
+            evidence_hash=pack_hash,
+        ),
+        approval_gate=_approval_gate(
+            run_id=run_id,
+            state=ApprovalGateState.PENDING_APPROVAL,
+            required_hash=pack_hash,
+            ledger_event="pending",
         ),
         narrative=result.narrative,
     )
@@ -331,12 +477,11 @@ async def run_agent_diagnosis(
 async def apply_and_verify(
     backend: Backend,
     pack: EvidencePack,
+    approval_ticket: ApprovalTicket,
     query_filter: dict,
     query_sort: list[tuple[str, int]],
     limit: int,
     narrator: Narrator | None = None,
-    approver: str = "dashboard-operator",
-    note: str = "",
     ledger: LedgerStore | None = None,
 ) -> EvidencePack:
     """Post-approval APPLY + VERIFY. Applies the recommended index (the human-approved
@@ -345,6 +490,7 @@ async def apply_and_verify(
     recommendation) at diagnosis and neither changed, so the approved hash still holds."""
     if pack.status is not PackStatus.DIAGNOSED:
         raise ValueError(f"can only apply+verify a DIAGNOSED pack, got '{pack.status}'")
+    _assert_ticket_allows_apply(pack, approval_ticket)
 
     phase_log = list(pack.phase_log)
     assert_phase_transition(Phase.DIAGNOSE, Phase.APPROVE)
@@ -361,7 +507,15 @@ async def apply_and_verify(
             stage=AgentTraceStage.APPROVE,
             actor=AgentTraceActor.HUMAN,
             status=AgentTraceStatus.OK,
-            summary=f"Approved by {approver}.",
+            summary=f"Approved by {approval_ticket.approver}.",
+            ledger_ref=_ledger_ref(APPROVALS, pack.run_id, "approve:approval"),
+        ),
+        AgentTraceEvent(
+            stage=AgentTraceStage.GATE,
+            actor=AgentTraceActor.APPROVAL_GATE,
+            status=AgentTraceStatus.OK,
+            summary="Approval gate issued a one-time apply ticket.",
+            tool="approval_gate",
             ledger_ref=_ledger_ref(APPROVALS, pack.run_id, "approve:approval"),
         ),
     ]
@@ -410,14 +564,25 @@ async def apply_and_verify(
         decision=decision,
         phase_log=phase_log,
         agent_trace=agent_trace,
+        approval_gate=_approval_gate(
+            run_id=pack.run_id,
+            state=ApprovalGateState.VERIFIED
+            if status is PackStatus.VERIFIED
+            else ApprovalGateState.APPROVED,
+            required_hash=pack.evidence_hash,
+            approved_hash=approval_ticket.evidence_hash,
+            approver=approval_ticket.approver,
+            ledger_event="approval",
+            ledger_ref=_ledger_ref(APPROVALS, pack.run_id, "approve:approval"),
+        ),
         narrative=pack.narrative,
     )
     updated = await _maybe_narrate(updated, narrator)
     write_application_records(
         ledger,
         pack=updated,
-        approver=approver,
-        note=note,
+        approver=approval_ticket.approver,
+        note=approval_ticket.note,
         index_name=index_name,
     )
     return updated
@@ -433,6 +598,10 @@ def reject_pack(
     """Record a human rejection — no mutation, no after-evidence."""
     if pack.status is not PackStatus.DIAGNOSED:
         raise ValueError(f"can only reject a DIAGNOSED pack, got '{pack.status}'")
+    if pack.approval_gate is None:
+        raise ValueError("can only reject a pack with an approval gate")
+    if pack.approval_gate.state is not ApprovalGateState.PENDING_APPROVAL:
+        raise ValueError("can only reject a pack with a pending approval gate")
     assert_phase_transition(Phase.DIAGNOSE, Phase.APPROVE)
     decision = Decision(
         action=DecisionAction.REJECT, evidence_hash=pack.evidence_hash, phase=Phase.APPROVE
@@ -459,7 +628,23 @@ def reject_pack(
                 summary=f"Rejected by {approver}.",
                 ledger_ref=_ledger_ref(APPROVALS, pack.run_id, "approve:rejection"),
             ),
+            AgentTraceEvent(
+                stage=AgentTraceStage.GATE,
+                actor=AgentTraceActor.APPROVAL_GATE,
+                status=AgentTraceStatus.OK,
+                summary="Approval gate closed as rejected.",
+                tool="approval_gate",
+                ledger_ref=_ledger_ref(APPROVALS, pack.run_id, "approve:rejection"),
+            ),
         ],
+        approval_gate=_approval_gate(
+            run_id=pack.run_id,
+            state=ApprovalGateState.REJECTED,
+            required_hash=pack.evidence_hash,
+            approver=approver,
+            ledger_event="rejection",
+            ledger_ref=_ledger_ref(APPROVALS, pack.run_id, "approve:rejection"),
+        ),
         narrative=pack.narrative,
     )
     write_rejection_records(ledger, pack=rejected, approver=approver, note=note)

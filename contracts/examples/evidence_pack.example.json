@@ -1,6 +1,40 @@
 {
   "after": null,
-  "agent_trace": [],
+  "agent_trace": [
+    {
+      "actor": "approval_gate",
+      "ledger_ref": "approvals/example-esr-001:gate:opened",
+      "stage": "gate",
+      "status": "ok",
+      "summary": "Approval gate opened before diagnosis.",
+      "tool": "approval_gate"
+    },
+    {
+      "actor": "deterministic_controller",
+      "ledger_ref": null,
+      "stage": "diagnose",
+      "status": "ok",
+      "summary": "Deterministic controller produced the local diagnosis.",
+      "tool": "diagnose"
+    },
+    {
+      "actor": "approval_gate",
+      "ledger_ref": "approvals/example-esr-001:gate:pending",
+      "stage": "gate",
+      "status": "ok",
+      "summary": "Approval gate is pending for evidence hash a20fca5ded1f.",
+      "tool": "approval_gate"
+    }
+  ],
+  "approval_gate": {
+    "approved_hash": null,
+    "approver": null,
+    "gate_id": "example-esr-001:gate",
+    "ledger_ref": "approvals/example-esr-001:gate:pending",
+    "mutation_allowed": false,
+    "required_hash": "a20fca5ded1f8f2760a05401020813569356e8642185ba115a4ef5fc0cec640a",
+    "state": "pending_approval"
+  },
   "before": {
     "explain_plan": {
       "inputStage": {
@@ -53,7 +87,13 @@
   },
   "namespace": "sample_supplies.sales_agent_demo",
   "narrative": null,
-  "phase_log": [],
+  "phase_log": [
+    {
+      "from_phase": null,
+      "note": "",
+      "to_phase": "diagnose"
+    }
+  ],
   "recommendation": {
     "index_spec": [
       [

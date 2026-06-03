@@ -30,6 +30,7 @@ class DecisionAction(StrEnum):
 
 
 class AgentTraceStage(StrEnum):
+    GATE = "gate"
     DETECT = "detect"
     DIAGNOSE = "diagnose"
     CANDIDATE = "candidate"
@@ -40,6 +41,7 @@ class AgentTraceStage(StrEnum):
 
 
 class AgentTraceActor(StrEnum):
+    APPROVAL_GATE = "approval_gate"
     AGENT_ENGINE = "agent_engine"
     DETERMINISTIC_CONTROLLER = "deterministic_controller"
     HUMAN = "human"
@@ -151,6 +153,14 @@ class PackStatus(StrEnum):
     REJECTED = "rejected"
 
 
+class ApprovalGateState(StrEnum):
+    COLLECTING_EVIDENCE = "collecting_evidence"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    VERIFIED = "verified"
+
+
 class PhaseTransition(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -167,6 +177,22 @@ class AgentTraceEvent(BaseModel):
     status: AgentTraceStatus
     summary: str = Field(min_length=1)
     tool: str | None = None
+    ledger_ref: str | None = None
+
+
+class ApprovalGate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    gate_id: str = Field(min_length=1)
+    state: ApprovalGateState
+    required_hash: str | None = Field(
+        default=None, min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"
+    )
+    approved_hash: str | None = Field(
+        default=None, min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$"
+    )
+    approver: str | None = None
+    mutation_allowed: bool = False
     ledger_ref: str | None = None
 
 
@@ -190,6 +216,7 @@ class EvidencePack(BaseModel):
     decision: Decision | None = None
     phase_log: tuple[PhaseTransition, ...] = ()
     agent_trace: tuple[AgentTraceEvent, ...] = ()
+    approval_gate: ApprovalGate | None = None
     evidence_hash: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
     created_at: str = Field(min_length=1)
 
@@ -220,4 +247,37 @@ class EvidencePack(BaseModel):
                 raise ValueError(f"{self.status.value} pack must carry an approve decision")
             if self.after is None:
                 raise ValueError(f"{self.status.value} pack must have after-evidence")
+        return self
+
+    @model_validator(mode="after")
+    def _approval_gate_matches_status(self) -> "EvidencePack":
+        if self.approval_gate is None:
+            return self
+        gate = self.approval_gate
+        if gate.required_hash is not None and gate.required_hash != self.evidence_hash:
+            raise ValueError("approval_gate.required_hash must equal the pack's evidence_hash")
+        if gate.approved_hash is not None and gate.approved_hash != self.evidence_hash:
+            raise ValueError("approval_gate.approved_hash must equal the pack's evidence_hash")
+        if gate.mutation_allowed:
+            raise ValueError("persisted approval gate must not leave mutation_allowed=true")
+        if self.status is PackStatus.DIAGNOSED:
+            if gate.state is not ApprovalGateState.PENDING_APPROVAL:
+                raise ValueError("DIAGNOSED pack must have a pending approval gate")
+            if gate.required_hash is None or gate.approved_hash is not None:
+                raise ValueError("pending approval gate must require only the current hash")
+        elif self.status is PackStatus.REJECTED:
+            if gate.state is not ApprovalGateState.REJECTED:
+                raise ValueError("REJECTED pack must have a rejected approval gate")
+            if gate.approver is None:
+                raise ValueError("rejected approval gate must record the approver")
+        elif self.status is PackStatus.VERIFIED:
+            if gate.state is not ApprovalGateState.VERIFIED:
+                raise ValueError("VERIFIED pack must have a verified approval gate")
+            if gate.approved_hash is None or gate.approver is None:
+                raise ValueError("verified approval gate must record the approved hash")
+        else:
+            if gate.state is not ApprovalGateState.APPROVED:
+                raise ValueError("APPROVED pack must have an approved approval gate")
+            if gate.approved_hash is None or gate.approver is None:
+                raise ValueError("approved approval gate must record the approved hash")
         return self

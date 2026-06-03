@@ -49,6 +49,7 @@ export interface Decision {
 
 export type PackStatus = "diagnosed" | "approved" | "verified" | "rejected";
 export type AgentTraceStage =
+  | "gate"
   | "detect"
   | "diagnose"
   | "candidate"
@@ -56,8 +57,18 @@ export type AgentTraceStage =
   | "approve"
   | "apply"
   | "verify";
-export type AgentTraceActor = "agent_engine" | "deterministic_controller" | "human";
+export type AgentTraceActor =
+  | "approval_gate"
+  | "agent_engine"
+  | "deterministic_controller"
+  | "human";
 export type AgentTraceStatus = "ok" | "drift" | "failed";
+export type ApprovalGateState =
+  | "collecting_evidence"
+  | "pending_approval"
+  | "approved"
+  | "rejected"
+  | "verified";
 
 export interface AgentTraceEvent {
   stage: AgentTraceStage;
@@ -65,6 +76,16 @@ export interface AgentTraceEvent {
   status: AgentTraceStatus;
   summary: string;
   tool: string | null;
+  ledger_ref: string | null;
+}
+
+export interface ApprovalGate {
+  gate_id: string;
+  state: ApprovalGateState;
+  required_hash: string | null;
+  approved_hash: string | null;
+  approver: string | null;
+  mutation_allowed: boolean;
   ledger_ref: string | null;
 }
 
@@ -80,6 +101,7 @@ export interface EvidencePack {
   decision: Decision | null;
   phase_log: unknown[];
   agent_trace: AgentTraceEvent[];
+  approval_gate: ApprovalGate | null;
   evidence_hash: string;
   created_at: string;
 }

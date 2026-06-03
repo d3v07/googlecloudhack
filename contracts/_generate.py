@@ -6,11 +6,16 @@ this whenever EvidencePack changes.
 """
 
 import json
+import asyncio
+import sys
 from pathlib import Path
 
-from controller.diagnosis import diagnose
-from controller.pack import build_pack
-from controller.schemas import Evidence, EvidenceMetrics, EvidencePack, PackStatus
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from controller.backends import FakeBackend  # noqa: E402
+from controller.orchestrator import run_diagnosis  # noqa: E402
+from controller.schemas import Evidence, EvidenceMetrics, EvidencePack  # noqa: E402
 
 HERE = Path(__file__).parent
 QUERY_FILTER = {"storeLocation": "Denver", "customer.age": {"$gte": 30, "$lte": 50}}
@@ -35,17 +40,16 @@ def _example_pack() -> EvidencePack:
             stages=("FETCH", "SORT", "IXSCAN"),
         ),
     )
-    diagnosis = diagnose(
-        QUERY_FILTER, QUERY_SORT, has_blocking_sort=True, current_index="esr_wrong_B"
-    )
-    return build_pack(
-        run_id="example-esr-001",
-        namespace="sample_supplies.sales_agent_demo",
-        created_at="2026-06-01T00:00:00Z",
-        before=before,
-        finding=diagnosis.finding,
-        recommendation=diagnosis.recommendation,
-        status=PackStatus.DIAGNOSED,
+    return asyncio.run(
+        run_diagnosis(
+            FakeBackend([before]),
+            run_id="example-esr-001",
+            namespace="sample_supplies.sales_agent_demo",
+            created_at="2026-06-01T00:00:00Z",
+            query_filter=QUERY_FILTER,
+            query_sort=QUERY_SORT,
+            limit=20,
+        )
     )
 
 

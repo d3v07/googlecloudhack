@@ -40,6 +40,8 @@ from controller.explain import get_connection_string
 from evals.grade import (
     Scorecard,
     grade_agent_engine_used,
+    grade_approval_gate_first,
+    grade_approval_gate_records,
     grade_approval_verified,
     grade_esr_correct,
     grade_ledger_records,
@@ -136,16 +138,18 @@ def grade_live(card: Scorecard, api_url: str, token: str) -> dict | None:
     return pack
 
 
-def _ledger_record_ids(run_id: str) -> dict[str, str]:
+def _ledger_record_ids(run_id: str) -> dict[str, tuple[str, str]]:
     return {
-        "slow_queries": f"{run_id}:diagnose:slow_query",
-        "candidates": f"{run_id}:diagnose:candidate",
-        "experiments": f"{run_id}:diagnose:before",
-        "decisions": f"{run_id}:approve:decision",
-        "evidence_packs": run_id,
-        "approvals": f"{run_id}:approve:approval",
-        "applications": f"{run_id}:approve:application",
-        "verifications": f"{run_id}:verify:verification",
+        "slow_queries": ("slow_queries", f"{run_id}:diagnose:slow_query"),
+        "candidates": ("candidates", f"{run_id}:diagnose:candidate"),
+        "experiments": ("experiments", f"{run_id}:diagnose:before"),
+        "gate_opened": ("approvals", f"{run_id}:gate:opened"),
+        "gate_pending": ("approvals", f"{run_id}:gate:pending"),
+        "decisions": ("decisions", f"{run_id}:approve:decision"),
+        "evidence_packs": ("evidence_packs", run_id),
+        "approvals": ("approvals", f"{run_id}:approve:approval"),
+        "applications": ("applications", f"{run_id}:approve:application"),
+        "verifications": ("verifications", f"{run_id}:verify:verification"),
     }
 
 
@@ -170,12 +174,17 @@ def grade_diagram_live(card: Scorecard, api_url: str, token: str, connection_str
         after_approve_indexes = indexes()
         ids = _ledger_record_ids(run_id)
         records = {
-            collection: doc
-            for collection, record_id in ids.items()
+            logical_name: doc
+            for logical_name, (collection, record_id) in ids.items()
             if (doc := state[collection].find_one({"_id": record_id}, projection={"_id": False}))
             is not None
         }
-        present = set(records)
+        present = {ids[logical_name][0] for logical_name in records}
+        source_records = {
+            collection: records[collection]
+            for collection in ("slow_queries", "candidates", "experiments")
+            if collection in records
+        }
         tokenless_run = post_without_token(api_url, "/run", {"run_id": f"{run_id}-no-token"})
         tokenless_decision = post_without_token(
             api_url,
@@ -189,9 +198,11 @@ def grade_diagram_live(card: Scorecard, api_url: str, token: str, connection_str
         client.close()
 
     card.add("diagram_live", True, f"completed run_id={run_id}")
+    card.checks.append(grade_approval_gate_first(diagnosed))
     card.checks.append(grade_agent_engine_used(diagnosed))
     card.checks.append(grade_no_mutation_before_approval(before_indexes, after_run_indexes))
-    card.checks.append(grade_ledger_records(present, records))
+    card.checks.append(grade_approval_gate_records(records))
+    card.checks.append(grade_ledger_records(present, source_records))
     card.checks.append(grade_approval_verified(diagnosed, verified))
     card.checks.append(grade_no_extra_indexes(after_approve_indexes))
     card.checks.append(grade_tokenless_writes_rejected(tokenless_run, tokenless_decision))

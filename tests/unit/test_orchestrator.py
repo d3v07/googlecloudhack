@@ -8,8 +8,10 @@ from controller.backends import FakeBackend
 from controller.ledger_store import CANDIDATES, EXPERIMENTS, FakeLedgerStore, SLOW_QUERIES
 from controller.orchestrator import (
     AgentDiagnosisResult,
+    ApprovalTicket,
     DiagnosisAdvice,
     apply_and_verify,
+    issue_approval_ticket,
     reject_pack,
     run_agent_diagnosis,
     run_diagnosis,
@@ -21,6 +23,7 @@ from controller.schemas import (
     AgentTraceEvent,
     AgentTraceStage,
     AgentTraceStatus,
+    ApprovalGateState,
     DecisionAction,
     Evidence,
     EvidenceMetrics,
@@ -120,9 +123,19 @@ class _AgentDiagnosis:
 
 
 def _apply(backend: FakeBackend, pack: EvidencePack) -> EvidencePack:
+    ticket = issue_approval_ticket(
+        pack,
+        evidence_hash=pack.evidence_hash,
+        approver="dashboard-operator",
+    )
     return asyncio.run(
         apply_and_verify(
-            backend, pack, query_filter=QUERY_FILTER, query_sort=QUERY_SORT, limit=LIMIT
+            backend,
+            pack,
+            ticket,
+            query_filter=QUERY_FILTER,
+            query_sort=QUERY_SORT,
+            limit=LIMIT,
         )
     )
 
@@ -135,6 +148,19 @@ def test_diagnosis_is_diagnosed_with_no_decision_or_after():
     assert pack.status is PackStatus.DIAGNOSED
     assert pack.decision is None
     assert pack.after is None
+    assert pack.approval_gate is not None
+    assert pack.approval_gate.state is ApprovalGateState.PENDING_APPROVAL
+    assert pack.approval_gate.required_hash == pack.evidence_hash
+    assert pack.approval_gate.mutation_allowed is False
+
+
+def test_diagnosis_trace_starts_and_ends_with_approval_gate():
+    pack = _diagnose(FakeBackend([_make_evidence(has_blocking_sort=True, keys_examined=17000)]))
+
+    assert pack.agent_trace[0].stage is AgentTraceStage.GATE
+    assert pack.agent_trace[0].actor is AgentTraceActor.APPROVAL_GATE
+    assert pack.agent_trace[-1].stage is AgentTraceStage.GATE
+    assert "pending" in pack.agent_trace[-1].summary.lower()
 
 
 def test_diagnosis_does_not_mutate_the_collection():
@@ -255,9 +281,10 @@ def test_agent_led_diagnosis_builds_pack_from_agent_evidence():
         ("customer.age", 1),
     )
     assert pack.evidence_hash == pack_evidence_hash(pack.before, pack.recommendation)
-    assert pack.agent_trace[0].tool == "explain_slow_query"
-    assert pack.agent_trace[-1].actor is AgentTraceActor.DETERMINISTIC_CONTROLLER
-    assert pack.agent_trace[-1].status is AgentTraceStatus.OK
+    assert pack.agent_trace[0].actor is AgentTraceActor.APPROVAL_GATE
+    assert pack.agent_trace[1].tool == "explain_slow_query"
+    assert pack.agent_trace[-2].status is AgentTraceStatus.OK
+    assert pack.agent_trace[-1].actor is AgentTraceActor.APPROVAL_GATE
 
 
 def test_agent_led_diagnosis_records_drift_without_changing_winner():
@@ -280,7 +307,7 @@ def test_agent_led_diagnosis_records_drift_without_changing_winner():
         ("customer.age", 1),
     )
     assert "proposed_index=ignored" in pack.phase_log[0].note
-    assert pack.agent_trace[-1].status is AgentTraceStatus.DRIFT
+    assert pack.agent_trace[-2].status is AgentTraceStatus.DRIFT
 
 
 def test_agent_led_diagnosis_writes_agent_sourced_ledger_records():
@@ -352,6 +379,169 @@ def test_apply_and_verify_decision_is_approve_bound_to_hash():
     assert verified.decision.action is DecisionAction.APPROVE
     assert verified.decision.evidence_hash == verified.evidence_hash
     assert verified.decision.phase is Phase.APPROVE
+    assert verified.approval_gate is not None
+    assert verified.approval_gate.state is ApprovalGateState.VERIFIED
+    assert verified.approval_gate.approved_hash == verified.evidence_hash
+    assert verified.approval_gate.mutation_allowed is False
+
+
+def test_apply_and_verify_requires_an_approval_ticket_before_mutation():
+    backend = FakeBackend([_make_evidence(True), _make_evidence(False)])
+    pack = _diagnose(backend)
+
+    with pytest.raises(TypeError):
+        asyncio.run(
+            apply_and_verify(
+                backend,
+                pack,
+                query_filter=QUERY_FILTER,
+                query_sort=QUERY_SORT,
+                limit=LIMIT,
+            )
+        )
+    assert backend.applied_indexes == []
+
+
+def test_apply_and_verify_rejects_a_stale_approval_ticket_before_mutation():
+    backend = FakeBackend([_make_evidence(True), _make_evidence(False)])
+    pack = _diagnose(backend)
+    ticket = issue_approval_ticket(
+        pack,
+        evidence_hash=pack.evidence_hash,
+        approver="operator",
+    )
+    stale = ticket.__class__(
+        run_id=ticket.run_id,
+        evidence_hash="b" * 64,
+        approver=ticket.approver,
+        note=ticket.note,
+        gate_id=ticket.gate_id,
+    )
+
+    with pytest.raises(ValueError, match="ticket hash"):
+        asyncio.run(
+            apply_and_verify(
+                backend,
+                pack,
+                stale,
+                query_filter=QUERY_FILTER,
+                query_sort=QUERY_SORT,
+                limit=LIMIT,
+            )
+        )
+    assert backend.applied_indexes == []
+
+
+def test_approval_ticket_issuer_rejects_ungated_and_non_pending_packs():
+    pack = _diagnose(FakeBackend([_make_evidence(True)]))
+    ungated = pack.model_copy(update={"approval_gate": None})
+    non_pending = pack.model_copy(
+        update={
+            "approval_gate": pack.approval_gate.model_copy(
+                update={"state": ApprovalGateState.REJECTED, "approver": "op"}
+            )
+        }
+    )
+
+    with pytest.raises(ValueError, match="approval gate"):
+        issue_approval_ticket(ungated, evidence_hash=ungated.evidence_hash, approver="op")
+    with pytest.raises(ValueError, match="pending approval gate"):
+        issue_approval_ticket(non_pending, evidence_hash=non_pending.evidence_hash, approver="op")
+    with pytest.raises(ValueError, match="pending approval gate"):
+        issue_approval_ticket(pack, evidence_hash="b" * 64, approver="op")
+
+
+def test_approval_ticket_issuer_rejects_pack_hash_drift():
+    pack = _diagnose(FakeBackend([_make_evidence(True)]))
+    drifted_hash = "b" * 64
+    drifted = pack.model_copy(
+        update={
+            "approval_gate": pack.approval_gate.model_copy(update={"required_hash": drifted_hash})
+        }
+    )
+
+    with pytest.raises(ValueError, match="pack evidence hash"):
+        issue_approval_ticket(drifted, evidence_hash=drifted_hash, approver="op")
+
+
+def test_apply_and_verify_rejects_ticket_identity_mismatches_before_mutation():
+    pack = _diagnose(FakeBackend([_make_evidence(True)]))
+    base = issue_approval_ticket(pack, evidence_hash=pack.evidence_hash, approver="op")
+
+    cases = [
+        ApprovalTicket("other", base.evidence_hash, base.approver, base.note, base.gate_id),
+        ApprovalTicket(base.run_id, base.evidence_hash, base.approver, base.note, "other-gate"),
+    ]
+
+    for ticket in cases:
+        backend = FakeBackend([_make_evidence(False)])
+        with pytest.raises(ValueError, match="does not match"):
+            asyncio.run(
+                apply_and_verify(
+                    backend,
+                    pack,
+                    ticket,
+                    query_filter=QUERY_FILTER,
+                    query_sort=QUERY_SORT,
+                    limit=LIMIT,
+                )
+            )
+        assert backend.applied_indexes == []
+
+
+def test_apply_and_verify_rejects_ungated_or_non_pending_pack_before_mutation():
+    pack = _diagnose(FakeBackend([_make_evidence(True)]))
+    ticket = issue_approval_ticket(pack, evidence_hash=pack.evidence_hash, approver="op")
+    ungated = pack.model_copy(update={"approval_gate": None})
+    non_pending = pack.model_copy(
+        update={
+            "approval_gate": pack.approval_gate.model_copy(
+                update={"state": ApprovalGateState.REJECTED, "approver": "op"}
+            )
+        }
+    )
+
+    for candidate, match in (
+        (ungated, "approval gate"),
+        (non_pending, "pending approval gate"),
+    ):
+        backend = FakeBackend([_make_evidence(False)])
+        with pytest.raises(ValueError, match=match):
+            asyncio.run(
+                apply_and_verify(
+                    backend,
+                    candidate,
+                    ticket,
+                    query_filter=QUERY_FILTER,
+                    query_sort=QUERY_SORT,
+                    limit=LIMIT,
+                )
+            )
+        assert backend.applied_indexes == []
+
+
+def test_apply_and_verify_rejects_non_diagnosed_pack_before_mutation():
+    backend = FakeBackend([_make_evidence(True), _make_evidence(False)])
+    verified = _apply(backend, _diagnose(backend))
+    ticket = ApprovalTicket(
+        run_id=verified.run_id,
+        evidence_hash=verified.evidence_hash,
+        approver="op",
+        note="",
+        gate_id=verified.approval_gate.gate_id,
+    )
+
+    with pytest.raises(ValueError, match="DIAGNOSED"):
+        asyncio.run(
+            apply_and_verify(
+                FakeBackend([_make_evidence(False)]),
+                verified,
+                ticket,
+                query_filter=QUERY_FILTER,
+                query_sort=QUERY_SORT,
+                limit=LIMIT,
+            )
+        )
 
 
 def test_apply_and_verify_phase_log_has_three_entries():
@@ -417,6 +607,23 @@ def test_reject_pack_rejects_a_non_diagnosed_pack():
     rejected = reject_pack(pack)
     with pytest.raises(ValueError, match="DIAGNOSED"):
         reject_pack(rejected)
+
+
+def test_reject_pack_rejects_ungated_or_non_pending_pack():
+    pack = _diagnose(FakeBackend([_make_evidence(True)]))
+    ungated = pack.model_copy(update={"approval_gate": None})
+    non_pending = pack.model_copy(
+        update={
+            "approval_gate": pack.approval_gate.model_copy(
+                update={"state": ApprovalGateState.REJECTED, "approver": "op"}
+            )
+        }
+    )
+
+    with pytest.raises(ValueError, match="approval gate"):
+        reject_pack(ungated)
+    with pytest.raises(ValueError, match="pending approval gate"):
+        reject_pack(non_pending)
 
 
 # --- phase guard ---

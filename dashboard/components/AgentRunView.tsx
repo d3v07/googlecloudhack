@@ -12,7 +12,7 @@ import {
 import { StageIndicator } from "@/components/StageIndicator";
 import { PlanPanel } from "@/components/PlanPanel";
 import { EvidencePanel } from "@/components/EvidencePanel";
-import { ApproveBar } from "@/components/ApproveBar";
+import { ApprovalGatePanel } from "@/components/ApprovalGatePanel";
 import { TracePanel } from "@/components/TracePanel";
 import type { EvidencePack } from "@/lib/evidence";
 import type { PackSource } from "@/lib/api";
@@ -83,6 +83,8 @@ export function AgentRunView({
         </div>
       </header>
 
+      <ApprovalGatePanel pack={pack} running={running} onPackUpdate={setPack} />
+
       <div className={styles.askBar}>
         <button className={styles.askButton} onClick={onAsk} disabled={running}>
           {running ? (
@@ -111,8 +113,6 @@ export function AgentRunView({
         <PlanPanel before={pack.before} after={pack.after} />
         <EvidencePanel finding={pack.finding} recommendation={pack.recommendation} />
       </div>
-
-      <ApproveBar runId={pack.run_id} evidenceHash={pack.evidence_hash} status={pack.status} />
 
       <footer className={styles.footer}>
         EvidencePack <code>{pack.version}</code>

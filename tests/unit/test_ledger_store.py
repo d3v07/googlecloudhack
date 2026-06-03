@@ -16,8 +16,14 @@ from controller.ledger_store import (
     VERIFICATIONS,
     _write_approval_record,
     _write_decision_record,
+    write_gate_pending_record,
 )
-from controller.orchestrator import apply_and_verify, reject_pack, run_diagnosis
+from controller.orchestrator import (
+    apply_and_verify,
+    issue_approval_ticket,
+    reject_pack,
+    run_diagnosis,
+)
 from controller.schemas import Evidence, EvidenceMetrics, PackStatus
 
 QUERY_FILTER = {"storeLocation": "Denver", "customer.age": {"$gte": 30, "$lte": 50}}
@@ -66,16 +72,21 @@ def _apply(
     approver: str = "operator",
     note: str = "approved",
 ):
+    ticket = issue_approval_ticket(
+        pack,
+        evidence_hash=pack.evidence_hash,
+        approver=approver,
+        note=note,
+    )
     return asyncio.run(
         apply_and_verify(
             backend,
             pack,
+            ticket,
             query_filter=QUERY_FILTER,
             query_sort=QUERY_SORT,
             limit=LIMIT,
             ledger=ledger,
-            approver=approver,
-            note=note,
         )
     )
 
@@ -87,6 +98,10 @@ def test_diagnosis_writes_slow_query_candidate_experiment_and_pack_records():
     assert set(ledger.records[SLOW_QUERIES]) == {f"{RUN_ID}:diagnose:slow_query"}
     assert set(ledger.records[CANDIDATES]) == {f"{RUN_ID}:diagnose:candidate"}
     assert set(ledger.records[EXPERIMENTS]) == {f"{RUN_ID}:diagnose:before"}
+    assert set(ledger.records[APPROVALS]) == {
+        f"{RUN_ID}:gate:opened",
+        f"{RUN_ID}:gate:pending",
+    }
     assert set(ledger.records[EVIDENCE_PACKS]) == {RUN_ID}
     assert ledger.records[EVIDENCE_PACKS][RUN_ID]["status"] == PackStatus.DIAGNOSED.value
     assert ledger.records[CANDIDATES][f"{RUN_ID}:diagnose:candidate"]["index_spec"] == [
@@ -120,10 +135,16 @@ def test_diagnosis_ledger_writes_are_idempotent_for_retry():
         EXPERIMENTS: 1,
         DECISIONS: 0,
         EVIDENCE_PACKS: 1,
-        APPROVALS: 0,
+        APPROVALS: 2,
         APPLICATIONS: 0,
         VERIFICATIONS: 0,
     }
+
+
+def test_gate_pending_write_is_noop_without_ledger():
+    diagnosed = _diagnose(FakeBackend([_evidence(True, 17209)]))
+
+    assert write_gate_pending_record(None, pack=diagnosed) is None
 
 
 def test_reject_writes_decision_rejection_and_updated_pack_records():

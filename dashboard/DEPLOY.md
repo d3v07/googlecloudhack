@@ -59,9 +59,10 @@ curl -sf -X POST "$URL/api/run" -H 'content-type: application/json' -d '{}' \
 
 Expected: `homepage ok`, then `run -> diagnosed`.
 
-In the rendered page, a live run should show `pending approval`, the
-`evidence hash`, and a live/ledger persisted footer. Approving the run should
-settle the action bar as `Fix verified`.
+In the rendered page, the first viewport should show the **Approval Gate**. A live
+run should move the gate from collecting evidence to `pending approval`, show the
+`evidence hash`, and keep the live/ledger persisted footer. Approving the run should
+return a `verified` pack and close the gate as verified.
 
 ## Local verification (already done)
 

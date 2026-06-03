@@ -116,9 +116,14 @@ def test_committed_example_validates_against_the_contract():
     assert pack.status is PackStatus.DIAGNOSED
     assert pack.recommendation.index_spec[0] == ("storeLocation", 1)
     assert pack.narrative is None  # example keeps narrative unset
+    assert pack.approval_gate is not None
+    assert pack.approval_gate.required_hash == pack.evidence_hash
+    assert pack.agent_trace[0].actor.value == "approval_gate"
+    assert pack.agent_trace[0].stage.value == "gate"
 
 
 def test_committed_schema_is_in_sync_with_the_model():
     assert json.loads(SCHEMA.read_text()) == EvidencePack.model_json_schema()
     assert "narrative" in EvidencePack.model_json_schema()["properties"]
     assert "agent_trace" in EvidencePack.model_json_schema()["properties"]
+    assert "approval_gate" in EvidencePack.model_json_schema()["properties"]

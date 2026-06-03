@@ -170,6 +170,41 @@ def grade_agent_engine_used(pack: dict) -> Check:
     return Check("agent_engine_path", used, detail)
 
 
+def grade_approval_gate_first(pack: dict) -> Check:
+    trace = pack.get("agent_trace", [])
+    first = trace[0] if trace and isinstance(trace[0], dict) else {}
+    gate = pack.get("approval_gate") if isinstance(pack.get("approval_gate"), dict) else {}
+    ok = (
+        first.get("actor") == "approval_gate"
+        and first.get("stage") == "gate"
+        and gate.get("state") == "pending_approval"
+        and gate.get("required_hash") == pack.get("evidence_hash")
+        and gate.get("mutation_allowed") is False
+    )
+    detail = (
+        "first trace event is approval_gate/gate and gate is pending on the pack hash"
+        if ok
+        else (
+            f"first={first.get('actor')}/{first.get('stage')}; "
+            f"gate_state={gate.get('state')}; "
+            f"required_hash_matches={gate.get('required_hash') == pack.get('evidence_hash')}"
+        )
+    )
+    return Check("approval_gate_first", ok, detail)
+
+
+def grade_approval_gate_records(records: dict[str, dict]) -> Check:
+    opened = records.get("gate_opened")
+    pending = records.get("gate_pending")
+    ok = opened is not None and pending is not None and pending.get("mutation_allowed") is False
+    detail = (
+        "gate-opened and gate-pending ledger records exist"
+        if ok
+        else f"gate_opened={opened is not None}; gate_pending={pending is not None}"
+    )
+    return Check("approval_gate_ledger_records", ok, detail)
+
+
 def grade_no_mutation_before_approval(
     before_indexes: set[str], after_run_indexes: set[str]
 ) -> Check:
