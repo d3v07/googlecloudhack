@@ -21,8 +21,23 @@ from controller.schemas import (
 )
 
 
+DIAGNOSE_AGENT_RESOURCE_ENV = "AGENT_ENGINE_DIAGNOSE_RESOURCE"
+CANDIDATE_AGENT_RESOURCE_ENV = "AGENT_ENGINE_CANDIDATE_RESOURCE"
+RATIONALE_AGENT_RESOURCE_ENV = "AGENT_ENGINE_RATIONALE_RESOURCE"
+LEGACY_AGENT_RESOURCE_ENV = "AGENT_ENGINE_RESOURCE"
+SPLIT_AGENT_RESOURCE_ENVS = (
+    DIAGNOSE_AGENT_RESOURCE_ENV,
+    CANDIDATE_AGENT_RESOURCE_ENV,
+    RATIONALE_AGENT_RESOURCE_ENV,
+)
+
+
 class AgentDiagnosisParseError(ValueError):
     """Raised when Agent Engine returns a response that cannot be parsed as diagnosis."""
+
+
+class AgentEngineConfigError(ValueError):
+    """Raised when split Agent Engine resources are partially configured."""
 
 
 def _normalize_index_spec(value: Any) -> tuple[tuple[str, int], ...]:
@@ -127,7 +142,9 @@ def _build_prompt(
     )
 
 
-def _trace_for_tool(name: str, payload: dict[str, Any]) -> AgentTraceEvent:
+def _trace_for_tool(
+    name: str, payload: dict[str, Any], *, resource: str | None = None
+) -> AgentTraceEvent:
     stage = {
         "explain_slow_query": AgentTraceStage.DETECT,
         "compare_candidate_indexes": AgentTraceStage.CANDIDATE,
@@ -146,9 +163,20 @@ def _trace_for_tool(name: str, payload: dict[str, Any]) -> AgentTraceEvent:
         stage=stage,
         actor=AgentTraceActor.AGENT_ENGINE,
         status=AgentTraceStatus.OK,
+        component=_component_for_tool(name),
+        resource=resource,
         tool=name,
         summary=summary,
     )
+
+
+def _component_for_tool(name: str) -> str | None:
+    return {
+        "explain_slow_query": "diagnose_agent",
+        "diagnose_candidate": "diagnose_agent",
+        "compare_candidate_indexes": "candidate_agent",
+        "rationalize_recommendation": "rationale_agent",
+    }.get(name)
 
 
 def _response_by_name(
@@ -216,7 +244,9 @@ def _diagnosis_from_events(
     before = _before_from_payload(parsed, responses)
     proposed_index = _proposed_index_from_payload(parsed, responses)
     rationale = _rationale_from_payload(parsed, responses, text)
-    trace = tuple(_trace_for_tool(name, payload) for name, payload in responses)
+    trace = tuple(
+        _trace_for_tool(name, payload, resource=resource_name) for name, payload in responses
+    )
     return AgentDiagnosisResult(
         source=resource_name,
         before=before,
@@ -224,6 +254,200 @@ def _diagnosis_from_events(
         proposed_index=proposed_index,
         trace=trace,
     )
+
+
+def _role_prompt(
+    tool_name: str,
+    *,
+    run_id: str,
+    namespace: str,
+    query_filter: dict,
+    query_sort: list[tuple[str, int]],
+    limit: int,
+) -> str:
+    payload = {
+        "run_id": run_id,
+        "namespace": namespace,
+        "query": {"filter": query_filter, "sort": query_sort, "limit": limit},
+    }
+    prompts = {
+        "explain_slow_query": (
+            "Run exactly one tool: explain_slow_query. Return compact JSON containing "
+            "`before` evidence and the tool name. Do not call any mutation tools."
+        ),
+        "compare_candidate_indexes": (
+            "Run exactly one tool: compare_candidate_indexes. Return compact JSON containing "
+            "candidate metrics, winner, and the tool name. Do not call any mutation tools."
+        ),
+        "diagnose_candidate": (
+            "Run exactly one tool: diagnose_candidate. Return compact JSON containing "
+            "`before`, `diagnosis`, `recommended_index`, and the tool name. Do not call "
+            "any mutation tools."
+        ),
+        "rationalize_recommendation": (
+            "Run exactly one tool: rationalize_recommendation. Return compact JSON containing "
+            "`recommended_index`, `rationale`, and the tool name. Do not call any mutation tools."
+        ),
+    }
+    return f"{prompts[tool_name]}\n\n{json.dumps(payload, sort_keys=True)}"
+
+
+@dataclass(frozen=True)
+class AgentEngineRoleClient:
+    resource_name: str
+    project: str | None = None
+    location: str | None = None
+
+    async def run_tool(  # pragma: no cover - live Vertex AI I/O
+        self,
+        *,
+        user_id: str,
+        tool_name: str,
+        prompt: str,
+    ) -> tuple[str, dict[str, Any]]:
+        import vertexai
+
+        client = vertexai.Client(project=self.project, location=self.location)
+        remote = client.agent_engines.get(name=self.resource_name)
+        chunks: list[str] = []
+        responses: list[tuple[str, dict[str, Any]]] = []
+        async for event in remote.async_stream_query(user_id=user_id, message=prompt):
+            chunks.append(_event_text(event))
+            responses.extend(_event_function_responses(event))
+        found = [name for name, _ in responses]
+        matches = [payload for name, payload in responses if name == tool_name]
+        unexpected = [name for name in found if name != tool_name]
+        if len(matches) != 1 or unexpected:
+            raise AgentDiagnosisParseError(
+                f"{self.resource_name} must return exactly one {tool_name} response; found={found}"
+            )
+        return "".join(chunks), matches[0]
+
+
+@dataclass(frozen=True)
+class AgentEngineDiagnosisPipeline:
+    diagnose_agent: AgentEngineRoleClient
+    candidate_agent: AgentEngineRoleClient
+    rationale_agent: AgentEngineRoleClient
+
+    @classmethod
+    def from_env(cls, *, required: bool = False) -> "AgentEngineDiagnosisPipeline | None":
+        resources = {
+            name: (os.environ.get(name) or "").strip() for name in SPLIT_AGENT_RESOURCE_ENVS
+        }
+        configured = {name: value for name, value in resources.items() if value}
+        if not configured:
+            if required:
+                raise AgentEngineConfigError(
+                    "all three split Agent Engine resources are required for production /run"
+                )
+            return None
+        if len(configured) != len(SPLIT_AGENT_RESOURCE_ENVS):
+            missing = sorted(name for name, value in resources.items() if not value)
+            raise AgentEngineConfigError(
+                "split Agent Engine resources are partially configured; missing "
+                + ", ".join(missing)
+            )
+        if len(set(configured.values())) != len(SPLIT_AGENT_RESOURCE_ENVS):
+            raise AgentEngineConfigError(
+                "split Agent Engine resources must be three distinct deployed agents"
+            )
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+        return cls(
+            diagnose_agent=AgentEngineRoleClient(
+                resources[DIAGNOSE_AGENT_RESOURCE_ENV] or "", project, location
+            ),
+            candidate_agent=AgentEngineRoleClient(
+                resources[CANDIDATE_AGENT_RESOURCE_ENV] or "", project, location
+            ),
+            rationale_agent=AgentEngineRoleClient(
+                resources[RATIONALE_AGENT_RESOURCE_ENV] or "", project, location
+            ),
+        )
+
+    async def diagnose(
+        self,
+        *,
+        run_id: str,
+        namespace: str,
+        query_filter: dict,
+        query_sort: list[tuple[str, int]],
+        limit: int,
+    ) -> AgentDiagnosisResult:
+        calls = (
+            (self.diagnose_agent, "explain_slow_query"),
+            (self.candidate_agent, "compare_candidate_indexes"),
+            (self.diagnose_agent, "diagnose_candidate"),
+            (self.rationale_agent, "rationalize_recommendation"),
+        )
+        responses: list[tuple[str, dict[str, Any]]] = []
+        texts: list[str] = []
+        for client, tool_name in calls:
+            text, payload = await client.run_tool(
+                user_id=f"{run_id}:{tool_name}",
+                tool_name=tool_name,
+                prompt=_role_prompt(
+                    tool_name,
+                    run_id=run_id,
+                    namespace=namespace,
+                    query_filter=query_filter,
+                    query_sort=query_sort,
+                    limit=limit,
+                ),
+            )
+            texts.append(text)
+            responses.append((tool_name, payload))
+        try:
+            before = _before_from_payload({}, responses)
+            proposed_index = _proposed_index_from_payload({}, responses)
+        except ValueError as exc:
+            raise AgentDiagnosisParseError(str(exc)) from exc
+        rationale = _rationale_from_payload({}, responses, "\n".join(texts))
+        return AgentDiagnosisResult(
+            source="split_agent_engine",
+            before=before,
+            narrative=rationale,
+            proposed_index=proposed_index,
+            trace=(
+                _trace_for_tool(
+                    "explain_slow_query",
+                    responses[0][1],
+                    resource=self.diagnose_agent.resource_name,
+                ),
+                _trace_for_tool(
+                    "compare_candidate_indexes",
+                    responses[1][1],
+                    resource=self.candidate_agent.resource_name,
+                ),
+                _trace_for_tool(
+                    "diagnose_candidate",
+                    responses[2][1],
+                    resource=self.diagnose_agent.resource_name,
+                ),
+                _trace_for_tool(
+                    "rationalize_recommendation",
+                    responses[3][1],
+                    resource=self.rationale_agent.resource_name,
+                ),
+            ),
+        )
+
+
+def diagnosis_agent_from_env(
+    *, require_split: bool = False, allow_legacy: bool = True
+) -> "AgentEngineDiagnosisPipeline | AgentEngineDiagnosisClient | None":
+    if require_split and os.environ.get(LEGACY_AGENT_RESOURCE_ENV):
+        raise AgentEngineConfigError(
+            "AGENT_ENGINE_RESOURCE is legacy-only; production must use the three split "
+            "Agent Engine resource env vars"
+        )
+    split = AgentEngineDiagnosisPipeline.from_env(required=require_split)
+    if split is not None:
+        return split
+    if not allow_legacy:
+        return None
+    return AgentEngineDiagnosisClient.from_env()
 
 
 @dataclass(frozen=True)
@@ -234,7 +458,7 @@ class AgentEngineDiagnosisClient:
 
     @classmethod
     def from_env(cls) -> "AgentEngineDiagnosisClient | None":
-        resource_name = os.environ.get("AGENT_ENGINE_RESOURCE")
+        resource_name = os.environ.get(LEGACY_AGENT_RESOURCE_ENV)
         if not resource_name:
             return None
         return cls(

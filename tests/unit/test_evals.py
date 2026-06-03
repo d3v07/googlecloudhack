@@ -110,10 +110,30 @@ def test_grade_live_requires_agent_engine_tool_trace(monkeypatch):
                     "index_spec": [["storeLocation", 1], ["saleDate", -1], ["customer.age", 1]]
                 },
                 "agent_trace": [
-                    {"actor": "agent_engine", "tool": "explain_slow_query"},
-                    {"actor": "agent_engine", "tool": "compare_candidate_indexes"},
-                    {"actor": "agent_engine", "tool": "diagnose_candidate"},
-                    {"actor": "agent_engine", "tool": "rationalize_recommendation"},
+                    {
+                        "actor": "agent_engine",
+                        "component": "diagnose_agent",
+                        "resource": "diagnose-resource",
+                        "tool": "explain_slow_query",
+                    },
+                    {
+                        "actor": "agent_engine",
+                        "component": "candidate_agent",
+                        "resource": "candidate-resource",
+                        "tool": "compare_candidate_indexes",
+                    },
+                    {
+                        "actor": "agent_engine",
+                        "component": "diagnose_agent",
+                        "resource": "diagnose-resource",
+                        "tool": "diagnose_candidate",
+                    },
+                    {
+                        "actor": "agent_engine",
+                        "component": "rationale_agent",
+                        "resource": "rationale-resource",
+                        "tool": "rationalize_recommendation",
+                    },
                 ],
             },
             1.25,
@@ -167,15 +187,75 @@ def test_agent_engine_path_requires_native_tool_trace():
     pack = {
         "agent_trace": [
             {"actor": "approval_gate", "stage": "gate", "tool": "approval_gate"},
-            {"actor": "agent_engine", "tool": "explain_slow_query"},
-            {"actor": "agent_engine", "tool": "compare_candidate_indexes"},
-            {"actor": "agent_engine", "tool": "diagnose_candidate"},
-            {"actor": "agent_engine", "tool": "rationalize_recommendation"},
+            {
+                "actor": "agent_engine",
+                "component": "diagnose_agent",
+                "resource": "diagnose-resource",
+                "tool": "explain_slow_query",
+            },
+            {
+                "actor": "agent_engine",
+                "component": "candidate_agent",
+                "resource": "candidate-resource",
+                "tool": "compare_candidate_indexes",
+            },
+            {
+                "actor": "agent_engine",
+                "component": "diagnose_agent",
+                "resource": "diagnose-resource",
+                "tool": "diagnose_candidate",
+            },
+            {
+                "actor": "agent_engine",
+                "component": "rationale_agent",
+                "resource": "rationale-resource",
+                "tool": "rationalize_recommendation",
+            },
             {"actor": "deterministic_controller", "tool": "validate_agent_diagnosis"},
         ]
     }
     assert grade_agent_engine_used(pack).passed
     assert not grade_agent_engine_used({"phase_log": [{"note": "agent_engine=resource"}]}).passed
+    assert not grade_agent_engine_used(
+        {
+            "agent_trace": [
+                {"actor": "agent_engine", "tool": "explain_slow_query"},
+                {"actor": "agent_engine", "tool": "compare_candidate_indexes"},
+                {"actor": "agent_engine", "tool": "diagnose_candidate"},
+                {"actor": "agent_engine", "tool": "rationalize_recommendation"},
+            ]
+        }
+    ).passed
+    assert not grade_agent_engine_used(
+        {
+            "agent_trace": [
+                {
+                    "actor": "agent_engine",
+                    "component": "diagnose_agent",
+                    "resource": "same-resource",
+                    "tool": "explain_slow_query",
+                },
+                {
+                    "actor": "agent_engine",
+                    "component": "candidate_agent",
+                    "resource": "same-resource",
+                    "tool": "compare_candidate_indexes",
+                },
+                {
+                    "actor": "agent_engine",
+                    "component": "diagnose_agent",
+                    "resource": "same-resource",
+                    "tool": "diagnose_candidate",
+                },
+                {
+                    "actor": "agent_engine",
+                    "component": "rationale_agent",
+                    "resource": "same-resource",
+                    "tool": "rationalize_recommendation",
+                },
+            ]
+        }
+    ).passed
 
 
 def test_approval_gate_first_requires_first_trace_and_pending_gate():

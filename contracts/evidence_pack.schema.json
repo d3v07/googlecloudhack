@@ -15,6 +15,18 @@
         "actor": {
           "$ref": "#/$defs/AgentTraceActor"
         },
+        "component": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Component"
+        },
         "ledger_ref": {
           "anyOf": [
             {
@@ -26,6 +38,18 @@
           ],
           "default": null,
           "title": "Ledger Ref"
+        },
+        "resource": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resource"
         },
         "stage": {
           "$ref": "#/$defs/AgentTraceStage"

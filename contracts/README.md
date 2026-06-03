@@ -20,8 +20,10 @@ The dashboard consumes `EvidencePack` JSON — via this schema and the read endp
 `approval_gate` is the dashboard-visible control plane: `/run` opens it before
 diagnosis, moves it to `pending_approval` with the required hash, and the decision
 route closes it as rejected or verified. `agent_trace` must start with the
-`approval_gate/gate` event, then record Agent Engine native tool events, deterministic
-validation, human approval, apply, and verify.
+`approval_gate/gate` event, then record split Agent Engine role events
+(`component`: `diagnose_agent`, `candidate_agent`, `rationale_agent`) plus the
+actual Agent Engine `resource`,
+deterministic validation, human approval, apply, and verify.
 
 ## Regenerate
 

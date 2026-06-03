@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from api.agent_engine import AgentDiagnosisParseError
+from api.agent_engine import AgentDiagnosisParseError, AgentEngineConfigError
 from api.server import LocalFilePackStore, MongoPackStore, _EmptyPackStore, _LiveEngine, create_app
 from controller.backends import FakeBackend
 from controller.orchestrator import AgentDiagnosisResult
@@ -483,7 +483,24 @@ def test_live_engine_uses_agent_engine_before_local_backend_when_configured() ->
     assert pack.agent_trace[-1].actor.value == "approval_gate"
 
 
-def test_live_engine_falls_back_when_agent_engine_returns_invalid_output() -> None:
+def test_live_engine_does_not_fall_back_when_agent_engine_returns_invalid_output() -> None:
+    class _InvalidAgent:
+        async def diagnose(self, **kwargs) -> AgentDiagnosisResult:
+            raise AgentDiagnosisParseError("Agent Engine diagnosis did not return before evidence")
+
+    class _NoFallbackEngine(_LiveEngine):
+        def _backend(self):
+            raise AssertionError("fallback must not run in production mode")
+
+    import asyncio
+
+    engine = _NoFallbackEngine("unused", diagnosis_agent=_InvalidAgent())
+
+    with pytest.raises(AgentDiagnosisParseError, match="before evidence"):
+        asyncio.run(engine.diagnose("agent-no-fallback-run"))
+
+
+def test_live_engine_local_opt_in_fallback_records_agent_failure() -> None:
     evidence = Evidence(
         query={"filter": {"storeLocation": "Denver"}},
         explain_plan={"stage": "FETCH"},
@@ -504,7 +521,7 @@ def test_live_engine_falls_back_when_agent_engine_returns_invalid_output() -> No
 
     class _FallbackEngine(_LiveEngine):
         def __init__(self) -> None:
-            super().__init__("unused", diagnosis_agent=_InvalidAgent())
+            super().__init__("unused", diagnosis_agent=_InvalidAgent(), allow_agent_fallback=True)
             self.backend = FakeBackend([evidence])
 
         def _backend(self):
@@ -623,6 +640,19 @@ def test_create_app_live_mongo_mode_requires_write_token(monkeypatch) -> None:
     monkeypatch.delenv("RUN_API_TOKEN", raising=False)
 
     with pytest.raises(RuntimeError, match="RUN_API_TOKEN"):
+        create_app()
+
+
+def test_create_app_live_mongo_mode_requires_split_agent_resources(monkeypatch) -> None:
+    monkeypatch.setenv("MONGO_SECRET_NAME", "mongo-uri")
+    monkeypatch.setenv("RUN_API_TOKEN", "token")
+    monkeypatch.delenv("AGENT_ENGINE_RESOURCE", raising=False)
+    monkeypatch.delenv("AGENT_ENGINE_DIAGNOSE_RESOURCE", raising=False)
+    monkeypatch.delenv("AGENT_ENGINE_CANDIDATE_RESOURCE", raising=False)
+    monkeypatch.delenv("AGENT_ENGINE_RATIONALE_RESOURCE", raising=False)
+    monkeypatch.setattr("api.secrets.get_mongo_connection_string", lambda: "mongodb://localhost")
+
+    with pytest.raises(AgentEngineConfigError, match="required for production"):
         create_app()
 
 

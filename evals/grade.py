@@ -57,6 +57,11 @@ EXPECTED_AGENT_TOOLS = {
     "diagnose_candidate",
     "rationalize_recommendation",
 }
+EXPECTED_AGENT_COMPONENTS = {
+    "diagnose_agent",
+    "candidate_agent",
+    "rationale_agent",
+}
 AGENT_SOURCED_LEDGER = {
     "slow_queries",
     "candidates",
@@ -172,17 +177,42 @@ def grade_latency(elapsed_s: float | None) -> Check:
 
 def grade_agent_engine_used(pack: dict) -> Check:
     trace = pack.get("agent_trace", [])
-    tools = {
-        item.get("tool")
-        for item in trace
-        if isinstance(item, dict) and item.get("actor") == "agent_engine"
-    }
+    agent_events = [
+        item for item in trace if isinstance(item, dict) and item.get("actor") == "agent_engine"
+    ]
+    tools = {tool for item in agent_events if (tool := item.get("tool"))}
+    components = {component for item in agent_events if (component := item.get("component"))}
+    resources_by_component: dict[str, set[str]] = {}
+    for item in agent_events:
+        component = item.get("component")
+        resource = item.get("resource")
+        if component and resource:
+            resources_by_component.setdefault(component, set()).add(resource)
     missing = EXPECTED_AGENT_TOOLS - tools
-    used = not missing
+    missing_components = EXPECTED_AGENT_COMPONENTS - components
+    component_resources = {
+        component: next(iter(resources))
+        for component, resources in resources_by_component.items()
+        if len(resources) == 1
+    }
+    distinct_resources = set(component_resources.values())
+    missing_resource_components = EXPECTED_AGENT_COMPONENTS - component_resources.keys()
+    used = (
+        not missing
+        and not missing_components
+        and not missing_resource_components
+        and len(distinct_resources) == len(EXPECTED_AGENT_COMPONENTS)
+    )
     detail = (
-        f"Agent Engine tool trace present: {sorted(tools)}"
+        f"Agent Engine split-agent trace present: tools={sorted(tools)}; "
+        f"components={sorted(components)}; resources={sorted(distinct_resources)}"
         if used
-        else f"missing Agent Engine tool trace: {sorted(missing)}"
+        else (
+            f"missing Agent Engine proof: tools={sorted(missing)}; "
+            f"components={sorted(missing_components)}; "
+            f"resource_components={sorted(missing_resource_components)}; "
+            f"distinct_resources={len(distinct_resources)}"
+        )
     )
     return Check("agent_engine_path", used, detail)
 

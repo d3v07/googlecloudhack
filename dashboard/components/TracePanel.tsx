@@ -61,7 +61,7 @@ export function TracePanel({
         ) : (
           trace.map((event, index) => (
             <li
-              key={`${event.stage}-${event.actor}-${event.tool ?? index}`}
+              key={`${index}-${event.stage}-${event.actor}-${event.tool ?? "event"}`}
               className={styles.traceItem}
             >
               <span className={styles.traceState} data-status={event.status}>
@@ -70,6 +70,7 @@ export function TracePanel({
               <span className={styles.traceMeta}>
                 <span className={styles.stage}>{stageLabel(event.stage)}</span>
                 <span className={styles.actor}>{actorLabel(event.actor)}</span>
+                {event.component && <code className={styles.tool}>{event.component}</code>}
                 {event.tool && <code className={styles.tool}>{event.tool}</code>}
               </span>
               <span className={styles.traceSummary}>{event.summary}</span>

@@ -19,7 +19,9 @@ flowchart TB
 
     subgraph gcp["Google Cloud"]
         API["Controller API<br/>FastAPI on Cloud Run"]
-        AE["Agent Engine + ADK<br/>native diagnosis tools + rationale"]
+        DIAG["Diagnose Agent Engine<br/>explain + diagnosis tools"]
+        CAND["Candidate Agent Engine<br/>candidate comparison tool"]
+        RAT["Rationale Agent Engine<br/>evidence narrative tool"]
         SM["Secret Manager"]
     end
 
@@ -40,10 +42,16 @@ flowchart TB
     DASH -- "GET /packs/:id" --> API
     DASH -- "POST /run opens gate first" --> API
     DASH -- "POST /packs/:id/decision" --> API
-    API -- "/run asks for native read-only diagnosis" --> AE
-    AE -- "explain + candidate + rationale tool trace" --> API
+    API -- "/run asks diagnose role" --> DIAG
+    API -- "/run asks candidate role" --> CAND
+    API -- "/run asks rationale role" --> RAT
+    DIAG -- "detect + diagnose trace" --> API
+    CAND -- "candidate/test trace" --> API
+    RAT -- "rationale trace" --> API
     API --> ORCH
-    AE --> EXPLAIN --> TARGET
+    DIAG --> EXPLAIN --> TARGET
+    CAND --> EXPLAIN
+    RAT --> EXPLAIN
     ORCH --> DECIDE --> PACK
     GATE -. enforces .-> ORCH
     ORCH -- "gate/diagnosis/application/verification events" --> LEDGER --> STATE
@@ -59,9 +67,9 @@ flowchart TB
 | Stage (UI) | Engine phase | What happens | Who does it |
 |------------|-------------|--------------|-------------|
 | **Gate** | (pre) | Approval gate opens before diagnosis; mutation is blocked | **human gate / controller** |
-| **Detect** | (pre) | Slow query surfaced from the fixture / logs | Agent Engine native tool |
-| **Diagnose** | `DIAGNOSE` | Read `explain`, extract stages + counters, identify the blocking-sort root cause | Agent Engine native tools, deterministic code validates |
-| **Test** | `DIAGNOSE` | Compare B vs C and propose index **C** (correct ESR) from measured evidence | Agent Engine native tools, deterministic code recomputes |
+| **Detect** | (pre) | Slow query surfaced from the fixture / logs | Diagnose Agent Engine |
+| **Diagnose** | `DIAGNOSE` | Read `explain`, extract stages + counters, identify the blocking-sort root cause | Diagnose Agent Engine, deterministic code validates |
+| **Test** | `DIAGNOSE` | Compare B vs C and propose index **C** (correct ESR) from measured evidence | Candidate Agent Engine, deterministic code recomputes |
 | **Approve** | `APPROVE` | Human reviews the evidence pack and approves/rejects, keyed to `evidence_hash` | **human gate** |
 | **Verify** | `VERIFY` | Apply the approved index, re-`explain`, confirm the sort is gone | deterministic |
 
@@ -76,9 +84,9 @@ Three things make it a real plan-and-execute system (and the reason we run on
    decision arrives carrying the matching `evidence_hash`. Only the decision
    route can issue the one-time ticket required by `apply_and_verify`; stale
    hashes or legacy ungated packs return `409`.
-3. **Gemini never decides or applies** — Agent Engine can gather read-only evidence,
-   propose, and explain, but the *winner selection*, the *hash*, the *apply*, and the
-   *verification* are deterministic Python.
+3. **Gemini never decides or applies** — the split Agent Engine roles can gather
+   read-only evidence, propose, and explain, but the *winner selection*, the
+   *hash*, the *apply*, and the *verification* are deterministic Python.
 
 ## The contract boundary
 
@@ -90,7 +98,8 @@ schema.
 
 `EvidencePack.approval_gate` and `EvidencePack.agent_trace` are the visible
 architecture proof: the first trace event is the approval gate opening, followed by
-Agent Engine tool events, deterministic validation, human approval, apply, and verify.
+Diagnose/Candidate/Rationale Agent Engine events, deterministic validation, human
+approval, apply, and verify.
 
 The internal Evidence Ledger is richer than the dashboard contract. MongoDB
 stores event collections for `slow_queries`, `candidates`, `experiments`,

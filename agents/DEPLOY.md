@@ -1,8 +1,8 @@
 # DBRE Agent — Production Deploy Runbook
 
-Deploys the DBRE ADK agent as a persistent Vertex AI Agent Engine resource.
-The resource is NOT torn down after deploy — it remains callable at a stable hosted URL
-for the duration of the hackathon.
+Deploys the DBRE ADK agent as three persistent Vertex AI Agent Engine resources:
+Diagnose, Candidate, and Rationale. The resources are NOT torn down after deploy;
+each remains callable at a stable hosted URL for the duration of the hackathon.
 
 ## Prerequisites
 
@@ -64,22 +64,22 @@ MONGO_SECRET_NAME=mongodb-connection-string
 
 ## Deploy
 
-From the repo root (takes 3-5 minutes while Agent Engine builds the container):
+From the repo root (each role takes 3-5 minutes while Agent Engine builds the container):
 
 ```bash
 uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
        --with google-adk \
        --with python-dotenv \
-       python -m agents.deploy
+       python -m agents.deploy deploy-all
 ```
 
-Or explicitly pass the `deploy` subcommand:
+To redeploy one role, explicitly pass the role:
 
 ```bash
 uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
        --with google-adk \
        --with python-dotenv \
-       python -m agents.deploy deploy
+       python -m agents.deploy deploy --role diagnose
 ```
 
 Note: `-m agents.deploy` is required (not `python agents/deploy.py`). Script mode puts
@@ -87,43 +87,51 @@ Note: `-m agents.deploy` is required (not `python agents/deploy.py`). Script mod
 `controller.*` imports. `-m` mode puts the repo root on `sys.path`, matching pytest's
 `pythonpath = ["."]` config.
 
-The deploy uses the official ADK object deploy path:
+Each deploy uses the official ADK object deploy path:
 
-- deployed object: `vertexai.agent_engines.AdkApp(agent=build_agent(...))`
+- deployed object: role-specific `vertexai.agent_engines.AdkApp`
 - extra packages: `controller/`, `agents/`
 - requirements: runtime package list in `agents/deploy.py`
 - runtime identity: Agent Identity, with MongoDB read from Secret Manager by name
 - runtime env: non-reserved `GCRAH_AGENT_PROJECT` / `GCRAH_AGENT_LOCATION` seed
-  the ADK app initialization, and `MONGO_SECRET_NAME` / `MONGO_SECRET_VERSION` identify the
-  MongoDB URI secret. Google-reserved `GOOGLE_CLOUD_PROJECT` is not set by the deploy script.
+  the ADK app initialization, `GCRAH_AGENT_ROLE` selects the role, and
+  `MONGO_SECRET_NAME` / `MONGO_SECRET_VERSION` identify the MongoDB URI secret.
+  Google-reserved `GOOGLE_CLOUD_PROJECT` is not set by the deploy script.
 
 Expected output:
 
 ```text
 PROJECT=performer-497915
 LOCATION=us-central1
+ROLE=diagnose
 STAGING_BUCKET=gs://performer-497915-agent-engine-staging
 MONGO_SECRET_NAME=mongodb-connection-string
-ENGINE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<id>
+AGENT_ENGINE_DIAGNOSE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<diagnose-id>
+...
+AGENT_ENGINE_CANDIDATE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<candidate-id>
+...
+AGENT_ENGINE_RATIONALE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/<rationale-id>
+CLOUD_RUN_ENV=AGENT_ENGINE_DIAGNOSE_RESOURCE=projects/.../<diagnose-id>,AGENT_ENGINE_CANDIDATE_RESOURCE=projects/.../<candidate-id>,AGENT_ENGINE_RATIONALE_RESOURCE=projects/.../<rationale-id>
 ```
 
-Save the `ENGINE_RESOURCE` value — it is the stable resource name for all subsequent calls and teardown.
+Save all three `AGENT_ENGINE_*_RESOURCE` values. Cloud Run requires the Diagnose,
+Candidate, and Rationale resources and calls them in that order.
 
 ## Smoke Test
 
-After deploy completes, send one remote query to confirm the engine is callable and can
-run the native Mongo diagnosis tools:
+After deploy completes, send one remote query per role to confirm each engine is callable:
 
 ```bash
 uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
        --with google-adk \
        --with python-dotenv \
        python -m agents.deploy smoke \
-         --name "projects/782567466199/locations/us-central1/reasoningEngines/<id>"
+         --name "projects/782567466199/locations/us-central1/reasoningEngines/<diagnose-id>" \
+         --role diagnose
 ```
 
-Expect: streamed output mentioning the read-only native tools, the B-vs-C metrics, and
-the ESR index C recommendation.
+Repeat with the Candidate and Rationale resource names and matching `--role` values.
+Expect streamed output for each role.
 
 ## MCP Toolset — Local Only
 
@@ -144,9 +152,10 @@ which is worse.
    operations — keeps everything Python.
 3. Build a custom Agent Engine container image that bundles Node, enabling npx at runtime.
 
-For the shipped demo, Agent Engine performs the read-only diagnosis/rationale with
-Python-native Mongo tools. The deterministic controller validates the ESR winner, hash,
-phase gate, apply, verification, and ledger writes.
+For the shipped demo, Agent Engine performs the read-only diagnosis, candidate
+comparison, and rationale steps with Python-native Mongo tools. The deterministic
+controller validates the ESR winner, hash, phase gate, apply, verification, and
+ledger writes.
 
 ## Cost Notes
 
@@ -163,17 +172,17 @@ idle-billing behavior still applies.
 
 ## Teardown
 
-After the hackathon, delete the persistent engine:
+After the hackathon, delete each persistent engine:
 
 ```bash
 uv run --with "google-cloud-aiplatform[agent_engines]>=1.112" \
        --with google-adk \
        --with python-dotenv \
-       python -m agents.deploy teardown --name "projects/782567466199/locations/us-central1/reasoningEngines/<id>"
+       python -m agents.deploy teardown --name "projects/782567466199/locations/us-central1/reasoningEngines/<diagnose-id>"
 ```
 
 Or use the Python API directly:
 
 ```python
-client.agent_engines.delete(name="<ENGINE_RESOURCE>", force=True)
+client.agent_engines.delete(name="<RESOURCE_NAME>", force=True)
 ```

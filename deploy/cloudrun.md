@@ -56,7 +56,9 @@ Run from the **repo root**:
 ```bash
 export GCP_PROJECT=performer-497915
 export MONGO_SECRET_NAME=mongodb-connection-string
-export AGENT_ENGINE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/3211834543187165184
+export AGENT_ENGINE_DIAGNOSE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/DIAGNOSE_ENGINE_ID
+export AGENT_ENGINE_CANDIDATE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/CANDIDATE_ENGINE_ID
+export AGENT_ENGINE_RATIONALE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/RATIONALE_ENGINE_ID
 export RUN_API_TOKEN=$(openssl rand -hex 16)   # gates the write endpoints; reads stay public
 bash deploy/deploy_cloudrun.sh
 ```
@@ -70,11 +72,13 @@ in the repo root and push the image to Artifact Registry automatically.
 > dashboard must send the token from its server-side proxy; never expose it in
 > the client bundle.
 >
-> **Agent Engine:** `AGENT_ENGINE_RESOURCE` is required for deploy. `/run` uses that
-> resource as the native read-only diagnosis/rationale layer. The API opens the
-> approval gate first, Agent Engine gathers evidence, then the deterministic
-> controller validates and emits the DIAGNOSED EvidencePack. `MONGO_SECRET_NAME` is
-> also required; production must read MongoDB credentials from Secret Manager.
+> **Agent Engine:** all three split resources are required for deploy:
+> `AGENT_ENGINE_DIAGNOSE_RESOURCE`, `AGENT_ENGINE_CANDIDATE_RESOURCE`, and
+> `AGENT_ENGINE_RATIONALE_RESOURCE`. `/run` opens the approval gate first, then
+> calls the Diagnose, Candidate, and Rationale Agent Engine resources in order.
+> The deterministic controller validates the winner/hash and emits the DIAGNOSED
+> EvidencePack. `MONGO_SECRET_NAME` is also required; production must read MongoDB
+> credentials from Secret Manager.
 
 ### What the script does
 
@@ -83,7 +87,9 @@ in the repo root and push the image to Artifact Registry automatically.
    - `GOOGLE_CLOUD_PROJECT=performer-497915` — used by the Secret Manager client
    - `MONGO_SECRET_NAME=mongodb-connection-string` — the secret name (not the value)
    - `RUN_API_TOKEN` — shared secret gating the write endpoints
-   - `AGENT_ENGINE_RESOURCE` — deployed Agent Engine used by `/run`
+   - `AGENT_ENGINE_DIAGNOSE_RESOURCE` — deployed Diagnose Agent Engine resource
+   - `AGENT_ENGINE_CANDIDATE_RESOURCE` — deployed Candidate Agent Engine resource
+   - `AGENT_ENGINE_RATIONALE_RESOURCE` — deployed Rationale Agent Engine resource
    - SA: `dbre-agent@performer-497915.iam.gserviceaccount.com`
    - 0–3 instances, 512 MiB, 1 vCPU
 3. Prints the live service URL.

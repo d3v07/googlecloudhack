@@ -152,6 +152,8 @@ def test_agent_trace_event_validates_and_serializes():
         stage=AgentTraceStage.DETECT,
         actor=AgentTraceActor.AGENT_ENGINE,
         status=AgentTraceStatus.OK,
+        component="diagnose_agent",
+        resource="projects/p/locations/us-central1/reasoningEngines/diagnose",
         tool="explain_slow_query",
         summary="Agent Engine captured slow-query evidence.",
         ledger_ref="slow_queries/run-1:diagnose:slow_query",
@@ -162,6 +164,8 @@ def test_agent_trace_event_validates_and_serializes():
         "actor": "agent_engine",
         "status": "ok",
         "summary": "Agent Engine captured slow-query evidence.",
+        "component": "diagnose_agent",
+        "resource": "projects/p/locations/us-central1/reasoningEngines/diagnose",
         "tool": "explain_slow_query",
         "ledger_ref": "slow_queries/run-1:diagnose:slow_query",
     }

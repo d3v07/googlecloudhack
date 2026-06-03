@@ -36,7 +36,7 @@
     {
       "name": "live_agent_engine_path",
       "passed": true,
-      "detail": "Agent Engine tool trace present: ['compare_candidate_indexes', 'diagnose_candidate', 'explain_slow_query', 'rationalize_recommendation']"
+      "detail": "Agent Engine split-agent trace present: tools=['compare_candidate_indexes', 'diagnose_candidate', 'explain_slow_query', 'rationalize_recommendation']; components=['candidate_agent', 'diagnose_agent', 'rationale_agent']; resources=['projects/782567466199/locations/us-central1/reasoningEngines/7165924647274283008', 'projects/782567466199/locations/us-central1/reasoningEngines/7653439306937139200', 'projects/782567466199/locations/us-central1/reasoningEngines/8589062129523359744']"
     },
     {
       "name": "live_esr_correct",
@@ -51,12 +51,12 @@
     {
       "name": "live_latency",
       "passed": true,
-      "detail": "end-to-end 25.97s"
+      "detail": "end-to-end 50.29s"
     },
     {
       "name": "diagram_live",
       "passed": true,
-      "detail": "completed run_id=eval-diagram-1780505191"
+      "detail": "completed run_id=eval-diagram-1780507938"
     },
     {
       "name": "approval_gate_first",
@@ -66,7 +66,7 @@
     {
       "name": "agent_engine_path",
       "passed": true,
-      "detail": "Agent Engine tool trace present: ['compare_candidate_indexes', 'diagnose_candidate', 'explain_slow_query', 'rationalize_recommendation']"
+      "detail": "Agent Engine split-agent trace present: tools=['compare_candidate_indexes', 'diagnose_candidate', 'explain_slow_query', 'rationalize_recommendation']; components=['candidate_agent', 'diagnose_agent', 'rationale_agent']; resources=['projects/782567466199/locations/us-central1/reasoningEngines/7165924647274283008', 'projects/782567466199/locations/us-central1/reasoningEngines/7653439306937139200', 'projects/782567466199/locations/us-central1/reasoningEngines/8589062129523359744']"
     },
     {
       "name": "no_mutation_before_approval",
@@ -101,7 +101,7 @@
     {
       "name": "latency",
       "passed": true,
-      "detail": "end-to-end 22.87s"
+      "detail": "end-to-end 25.98s"
     }
   ]
 }

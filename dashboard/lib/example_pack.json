@@ -3,7 +3,9 @@
   "agent_trace": [
     {
       "actor": "approval_gate",
+      "component": null,
       "ledger_ref": "approvals/example-esr-001:gate:opened",
+      "resource": null,
       "stage": "gate",
       "status": "ok",
       "summary": "Approval gate opened before diagnosis.",
@@ -11,7 +13,9 @@
     },
     {
       "actor": "agent_engine",
+      "component": "diagnose_agent",
       "ledger_ref": "slow_queries/example-esr-001:diagnose:slow_query",
+      "resource": "projects/example/locations/us-central1/reasoningEngines/diagnose",
       "stage": "detect",
       "status": "ok",
       "summary": "Agent Engine captured slow-query explain evidence.",
@@ -19,7 +23,9 @@
     },
     {
       "actor": "agent_engine",
+      "component": "candidate_agent",
       "ledger_ref": "candidates/example-esr-001:diagnose:candidate",
+      "resource": "projects/example/locations/us-central1/reasoningEngines/candidate",
       "stage": "candidate",
       "status": "ok",
       "summary": "Agent Engine compared candidates and selected esr_right_C.",
@@ -27,7 +33,9 @@
     },
     {
       "actor": "agent_engine",
+      "component": "diagnose_agent",
       "ledger_ref": "experiments/example-esr-001:diagnose:before",
+      "resource": "projects/example/locations/us-central1/reasoningEngines/diagnose",
       "stage": "diagnose",
       "status": "ok",
       "summary": "Agent Engine ran diagnose_candidate.",
@@ -35,7 +43,9 @@
     },
     {
       "actor": "agent_engine",
+      "component": "rationale_agent",
       "ledger_ref": null,
+      "resource": "projects/example/locations/us-central1/reasoningEngines/rationale",
       "stage": "rationale",
       "status": "ok",
       "summary": "Agent Engine produced an evidence-grounded rationale.",
@@ -43,7 +53,9 @@
     },
     {
       "actor": "deterministic_controller",
+      "component": null,
       "ledger_ref": null,
+      "resource": null,
       "stage": "diagnose",
       "status": "ok",
       "summary": "Agent Engine proposal matched deterministic ESR validation.",
@@ -51,7 +63,9 @@
     },
     {
       "actor": "approval_gate",
+      "component": null,
       "ledger_ref": "approvals/example-esr-001:gate:pending",
+      "resource": null,
       "stage": "gate",
       "status": "ok",
       "summary": "Approval gate is pending for evidence hash a20fca5ded1f.",
