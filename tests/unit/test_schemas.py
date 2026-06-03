@@ -316,6 +316,12 @@ def test_valid_lifecycle_states_are_accepted():
     EvidencePack(**base, status=PackStatus.VERIFIED, after=before, decision=_approve(eh))
 
 
+def test_evidence_pack_rejects_tampered_persisted_hash():
+    base, _, _ = _pack_parts()
+    with pytest.raises(ValidationError, match="before-evidence and recommendation"):
+        EvidencePack(**(base | {"evidence_hash": "b" * 64}), status=PackStatus.DIAGNOSED)
+
+
 def test_approval_gate_rejects_hash_mismatches():
     base, before, eh = _pack_parts()
     with pytest.raises(ValidationError, match="required_hash"):

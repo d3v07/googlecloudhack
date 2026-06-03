@@ -15,10 +15,10 @@ three-phase safety engine (DIAGNOSE → APPROVE → VERIFY).
 Current production path:
 
 ```text
-Dashboard -> FastAPI Cloud Run -> Agent Engine native tools -> deterministic controller
-          -> approval gate opens -> Agent Engine native tools
-          -> deterministic controller -> DIAGNOSED EvidencePack
-          -> hash-bound human approval ticket -> apply + verify
+Dashboard -> FastAPI Cloud Run (opens approval gate) -> Agent Engine native tools
+          -> deterministic controller validates + emits DIAGNOSED EvidencePack
+          -> /packs/{id}/decision hash-bound approval ticket
+          -> apply + verify
 ```
 
 Agent Engine performs read-only Mongo diagnosis/rationale with Python-native tools.

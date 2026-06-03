@@ -545,6 +545,14 @@ def test_create_app_uses_empty_store_when_no_mongo_secret_and_no_dir(monkeypatch
         assert c.get("/packs").json() == []
 
 
+def test_create_app_live_mongo_mode_requires_write_token(monkeypatch) -> None:
+    monkeypatch.setenv("MONGO_SECRET_NAME", "mongo-uri")
+    monkeypatch.delenv("RUN_API_TOKEN", raising=False)
+
+    with pytest.raises(RuntimeError, match="RUN_API_TOKEN"):
+        create_app()
+
+
 # --- write-token auth (RUN_API_TOKEN gates the mutating endpoints) ---
 
 

@@ -138,6 +138,10 @@ def create_app(store: PackStore | None = None, engine: Engine | None = None) -> 
 
     if store is None:
         if os.getenv("MONGO_SECRET_NAME"):  # pragma: no cover - live
+            if not os.getenv("RUN_API_TOKEN"):
+                raise RuntimeError(
+                    "RUN_API_TOKEN is required when MONGO_SECRET_NAME enables live Mongo mode"
+                )
             from pymongo import MongoClient  # noqa: PLC0415
 
             from api.secrets import get_mongo_connection_string  # noqa: PLC0415

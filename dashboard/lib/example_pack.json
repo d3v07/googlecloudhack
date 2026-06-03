@@ -10,12 +10,44 @@
       "tool": "approval_gate"
     },
     {
+      "actor": "agent_engine",
+      "ledger_ref": "slow_queries/example-esr-001:diagnose:slow_query",
+      "stage": "detect",
+      "status": "ok",
+      "summary": "Agent Engine captured slow-query explain evidence.",
+      "tool": "explain_slow_query"
+    },
+    {
+      "actor": "agent_engine",
+      "ledger_ref": "candidates/example-esr-001:diagnose:candidate",
+      "stage": "candidate",
+      "status": "ok",
+      "summary": "Agent Engine compared candidates and selected esr_right_C.",
+      "tool": "compare_candidate_indexes"
+    },
+    {
+      "actor": "agent_engine",
+      "ledger_ref": "experiments/example-esr-001:diagnose:before",
+      "stage": "diagnose",
+      "status": "ok",
+      "summary": "Agent Engine ran diagnose_candidate.",
+      "tool": "diagnose_candidate"
+    },
+    {
+      "actor": "agent_engine",
+      "ledger_ref": null,
+      "stage": "rationale",
+      "status": "ok",
+      "summary": "Agent Engine produced an evidence-grounded rationale.",
+      "tool": "rationalize_recommendation"
+    },
+    {
       "actor": "deterministic_controller",
       "ledger_ref": null,
       "stage": "diagnose",
       "status": "ok",
-      "summary": "Deterministic controller produced the local diagnosis.",
-      "tool": "diagnose"
+      "summary": "Agent Engine proposal matched deterministic ESR validation.",
+      "tool": "validate_agent_diagnosis"
     },
     {
       "actor": "approval_gate",
@@ -90,7 +122,7 @@
   "phase_log": [
     {
       "from_phase": null,
-      "note": "",
+      "note": "agent_engine=example_agent_engine; proposed_index=accepted",
       "to_phase": "diagnose"
     }
   ],

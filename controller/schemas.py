@@ -223,6 +223,17 @@ class EvidencePack(BaseModel):
     narrative: str | None = None
 
     @model_validator(mode="after")
+    def _evidence_hash_binds_before_and_recommendation(self) -> "EvidencePack":
+        from controller.ledger import evidence_hash
+
+        expected = evidence_hash({"evidence": self.before, "recommendation": self.recommendation})
+        if self.evidence_hash != expected:
+            raise ValueError(
+                "evidence_hash must equal the hash of before-evidence and recommendation"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _decision_hash_binds_this_pack(self) -> "EvidencePack":
         if self.decision is not None and self.decision.evidence_hash != self.evidence_hash:
             raise ValueError("decision.evidence_hash must equal the pack's evidence_hash")
