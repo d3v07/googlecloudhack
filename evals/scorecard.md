@@ -13,8 +13,8 @@
 | `live_agent_engine_path` | ✅ | Agent Engine split-agent trace present: tools=['compare_candidate_indexes', 'diagnose_candidate', 'explain_slow_query', 'rationalize_recommendation']; components=['candidate_agent', 'diagnose_agent', 'rationale_agent']; resources=['projects/782567466199/locations/us-central1/reasoningEngines/7165924647274283008', 'projects/782567466199/locations/us-central1/reasoningEngines/7653439306937139200', 'projects/782567466199/locations/us-central1/reasoningEngines/8589062129523359744'] |
 | `live_esr_correct` | ✅ | recommended ESR index C: (('storeLocation', 1), ('saleDate', -1), ('customer.age', 1)) |
 | `live_narrative_grounded` | ✅ | mentions blocking sort=True; numbers cited=[17209]; fabricated=none |
-| `live_latency` | ✅ | end-to-end 50.29s |
-| `diagram_live` | ✅ | completed run_id=eval-diagram-1780507938 |
+| `live_latency` | ✅ | end-to-end 47.12s |
+| `diagram_live` | ✅ | completed run_id=eval-diagram-1780508880 |
 | `approval_gate_first` | ✅ | first trace event is approval_gate/gate and gate is pending on the pack hash |
 | `agent_engine_path` | ✅ | Agent Engine split-agent trace present: tools=['compare_candidate_indexes', 'diagnose_candidate', 'explain_slow_query', 'rationalize_recommendation']; components=['candidate_agent', 'diagnose_agent', 'rationale_agent']; resources=['projects/782567466199/locations/us-central1/reasoningEngines/7165924647274283008', 'projects/782567466199/locations/us-central1/reasoningEngines/7653439306937139200', 'projects/782567466199/locations/us-central1/reasoningEngines/8589062129523359744'] |
 | `no_mutation_before_approval` | ✅ | target indexes unchanged after /run |
@@ -23,4 +23,4 @@
 | `approval_verifies_esr_fix` | ✅ | diagnosed=diagnosed; verified=verified; hash_unchanged=True; keys=17209->64; sort_after=False |
 | `no_extra_indexes` | ✅ | target indexes clean: ['_id_', 'esr_right_C', 'esr_wrong_B'] |
 | `tokenless_writes_rejected` | ✅ | POST /run=401; POST /decision=401 |
-| `latency` | ✅ | end-to-end 25.98s |
+| `latency` | ✅ | end-to-end 26.73s |

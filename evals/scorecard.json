@@ -51,12 +51,12 @@
     {
       "name": "live_latency",
       "passed": true,
-      "detail": "end-to-end 50.29s"
+      "detail": "end-to-end 47.12s"
     },
     {
       "name": "diagram_live",
       "passed": true,
-      "detail": "completed run_id=eval-diagram-1780507938"
+      "detail": "completed run_id=eval-diagram-1780508880"
     },
     {
       "name": "approval_gate_first",
@@ -101,7 +101,7 @@
     {
       "name": "latency",
       "passed": true,
-      "detail": "end-to-end 25.98s"
+      "detail": "end-to-end 26.73s"
     }
   ]
 }
