@@ -9,6 +9,8 @@ from controller.ledger import evidence_hash as compute_hash
 from controller.persistence import write_pack
 from controller.phases import Phase
 from controller.schemas import (
+    ApprovalGate,
+    ApprovalGateState,
     Decision,
     DecisionAction,
     Evidence,
@@ -35,11 +37,23 @@ def _minimal_pack(run_id: str, status: PackStatus = PackStatus.DIAGNOSED) -> Evi
     # build a status-consistent pack (the model now enforces status ⟺ decision/after)
     after: Evidence | None = None
     decision: Decision | None = None
+    gate_state = ApprovalGateState.PENDING_APPROVAL
+    approved_hash: str | None = None
+    approver: str | None = None
     if status in (PackStatus.APPROVED, PackStatus.VERIFIED):
         after = before
         decision = Decision(action=DecisionAction.APPROVE, evidence_hash=eh, phase=Phase.APPROVE)
+        gate_state = (
+            ApprovalGateState.VERIFIED
+            if status is PackStatus.VERIFIED
+            else ApprovalGateState.APPROVED
+        )
+        approved_hash = eh
+        approver = "dashboard-operator"
     elif status is PackStatus.REJECTED:
         decision = Decision(action=DecisionAction.REJECT, evidence_hash=eh, phase=Phase.APPROVE)
+        gate_state = ApprovalGateState.REJECTED
+        approver = "dashboard-operator"
 
     return EvidencePack(
         run_id=run_id,
@@ -50,6 +64,15 @@ def _minimal_pack(run_id: str, status: PackStatus = PackStatus.DIAGNOSED) -> Evi
         finding=Finding(problem="test", severity=Severity.LOW, evidence_refs=("x",)),
         recommendation=rec,
         decision=decision,
+        approval_gate=ApprovalGate(
+            gate_id=f"{run_id}:gate",
+            state=gate_state,
+            required_hash=eh,
+            approved_hash=approved_hash,
+            approver=approver,
+            mutation_allowed=False,
+            ledger_ref=f"approvals/{run_id}:gate",
+        ),
         evidence_hash=eh,
         created_at="2026-06-01T00:00:00Z",
     )
@@ -82,9 +105,7 @@ class FakeEngine:
         self.diagnosed.append(run_id)
         return _minimal_pack(run_id, PackStatus.DIAGNOSED)
 
-    async def apply_and_verify(
-        self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
-    ) -> EvidencePack:
+    async def apply_and_verify(self, pack: EvidencePack, ticket) -> EvidencePack:
         self.applied.append(pack.run_id)
         return _minimal_pack(pack.run_id, PackStatus.VERIFIED)
 
@@ -310,6 +331,72 @@ def test_decision_already_decided_returns_409() -> None:
     assert resp.json()["error"] == "already_decided"
 
 
+def test_decision_approve_requires_approval_gate() -> None:
+    pack = _minimal_pack("run-no-gate").model_copy(update={"approval_gate": None})
+    client, _, engine = _decision_setup(pack)
+
+    resp = client.post(
+        "/packs/run-no-gate/decision",
+        json={"decision": "approve", "evidence_hash": pack.evidence_hash},
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "approval_gate"
+    assert engine.applied == []
+
+
+def test_decision_reject_requires_approval_gate() -> None:
+    pack = _minimal_pack("run-reject-no-gate").model_copy(update={"approval_gate": None})
+    client, _, engine = _decision_setup(pack)
+
+    resp = client.post(
+        "/packs/run-reject-no-gate/decision",
+        json={"decision": "reject", "evidence_hash": pack.evidence_hash},
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "approval_gate"
+    assert engine.rejected == []
+
+
+def test_decision_approve_returns_409_if_ticket_issue_fails(monkeypatch) -> None:
+    pack = _minimal_pack("run-ticket-fail")
+    client, _, engine = _decision_setup(pack)
+
+    def fail_ticket(*args, **kwargs):
+        raise ValueError("gate drift")
+
+    monkeypatch.setattr("api.routes.issue_approval_ticket", fail_ticket)
+    resp = client.post(
+        "/packs/run-ticket-fail/decision",
+        json={"decision": "approve", "evidence_hash": pack.evidence_hash},
+    )
+
+    assert resp.status_code == 409
+    assert resp.json() == {"error": "approval_gate", "detail": "gate drift"}
+    assert engine.applied == []
+
+
+def test_decision_reject_returns_409_if_engine_gate_check_fails() -> None:
+    class RejectFailEngine(FakeEngine):
+        def reject(
+            self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
+        ):
+            raise ValueError("gate drift")
+
+    pack = _minimal_pack("run-reject-fail")
+    store, engine = FakePackStore([pack]), RejectFailEngine()
+    client = TestClient(create_app(store, engine))
+
+    resp = client.post(
+        "/packs/run-reject-fail/decision",
+        json={"decision": "reject", "evidence_hash": pack.evidence_hash},
+    )
+
+    assert resp.status_code == 409
+    assert resp.json() == {"error": "approval_gate", "detail": "gate drift"}
+
+
 # --- POST /run route (#37 — DIAGNOSE-only, no mutation) ---
 
 
@@ -386,7 +473,9 @@ def test_live_engine_uses_agent_engine_before_local_backend_when_configured() ->
 
     assert pack.status is PackStatus.DIAGNOSED
     assert pack.narrative == "agent-led diagnosis"
-    assert pack.agent_trace[-1].actor.value == "deterministic_controller"
+    assert pack.agent_trace[0].actor.value == "approval_gate"
+    assert pack.agent_trace[-2].actor.value == "deterministic_controller"
+    assert pack.agent_trace[-1].actor.value == "approval_gate"
 
 
 # --- save_pack store-level tests ---
@@ -454,6 +543,14 @@ def test_create_app_uses_empty_store_when_no_mongo_secret_and_no_dir(monkeypatch
     app = create_app()
     with TestClient(app) as c:
         assert c.get("/packs").json() == []
+
+
+def test_create_app_live_mongo_mode_requires_write_token(monkeypatch) -> None:
+    monkeypatch.setenv("MONGO_SECRET_NAME", "mongo-uri")
+    monkeypatch.delenv("RUN_API_TOKEN", raising=False)
+
+    with pytest.raises(RuntimeError, match="RUN_API_TOKEN"):
+        create_app()
 
 
 # --- write-token auth (RUN_API_TOKEN gates the mutating endpoints) ---

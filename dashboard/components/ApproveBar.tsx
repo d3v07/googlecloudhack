@@ -17,9 +17,8 @@ import styles from "./ApproveBar.module.css";
  *
  * The hash is what the operator signs off on (it binds before + recommendation),
  * so it is sent with the decision. The actual request shape lives in
- * lib/approval.ts (see APPROVAL_CONTRACT.md). Until the approval API (#29) is
- * deployed, a decision returns `no_api` and the UI shows a clear "not persisted"
- * state rather than faking success.
+ * lib/approval.ts (see APPROVAL_CONTRACT.md). If the approval API is missing,
+ * the UI shows an error and does not fake a persisted decision.
  */
 export function ApproveBar({
   runId,
@@ -54,12 +53,6 @@ export function ApproveBar({
 
     if (res.ok) {
       setLocalStatus(res.status ?? (decision === "approve" ? "approved" : "rejected"));
-      return;
-    }
-    if (res.error === "no_api") {
-      // Demo/fallback: reflect the choice locally but be honest it wasn't saved.
-      setLocalStatus(decision === "approve" ? "approved" : "rejected");
-      setError("Recorded locally only — approval API not configured.");
       return;
     }
     setError(res.message ?? "Could not record the decision.");

@@ -2,6 +2,7 @@
   "$defs": {
     "AgentTraceActor": {
       "enum": [
+        "approval_gate",
         "agent_engine",
         "deterministic_controller",
         "human"
@@ -61,6 +62,7 @@
     },
     "AgentTraceStage": {
       "enum": [
+        "gate",
         "detect",
         "diagnose",
         "candidate",
@@ -79,6 +81,94 @@
         "failed"
       ],
       "title": "AgentTraceStatus",
+      "type": "string"
+    },
+    "ApprovalGate": {
+      "properties": {
+        "approved_hash": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved Hash"
+        },
+        "approver": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approver"
+        },
+        "gate_id": {
+          "minLength": 1,
+          "title": "Gate Id",
+          "type": "string"
+        },
+        "ledger_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ledger Ref"
+        },
+        "mutation_allowed": {
+          "default": false,
+          "title": "Mutation Allowed",
+          "type": "boolean"
+        },
+        "required_hash": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Hash"
+        },
+        "state": {
+          "$ref": "#/$defs/ApprovalGateState"
+        }
+      },
+      "required": [
+        "gate_id",
+        "state"
+      ],
+      "title": "ApprovalGate",
+      "type": "object"
+    },
+    "ApprovalGateState": {
+      "enum": [
+        "collecting_evidence",
+        "pending_approval",
+        "approved",
+        "rejected",
+        "verified"
+      ],
+      "title": "ApprovalGateState",
       "type": "string"
     },
     "Decision": {
@@ -328,6 +418,17 @@
       },
       "title": "Agent Trace",
       "type": "array"
+    },
+    "approval_gate": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApprovalGate"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "before": {
       "$ref": "#/$defs/Evidence"

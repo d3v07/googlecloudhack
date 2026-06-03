@@ -61,10 +61,11 @@ Two columns, Before (serving index B) and After (recommended index C):
 > Annotation: "Gemini writes the narrative; the deterministic core computed the
 > winner and the numbers."
 
-### Approve / Reject bar (`04-approve.png`)
-Shows the **evidence hash** (what the approval is bound to) and **Approve** /
-**Reject** buttons. After a decision the bar settles into an approved/rejected
-pill and disables — no double-submit.
+### Approval Gate (`04-approve.png`)
+First-viewport control surface for the **Human Operator / Judge**. It shows the
+gate state, the mutation blocked/unblocked status, the **evidence hash** (what the
+approval is bound to), and **Approve** / **Reject** buttons when pending. After a
+decision the gate closes as verified/rejected — no double-submit.
 
 > Annotation: "The human gate. The approval is signed against this exact evidence
 > hash — change the evidence, and the old approval is void."

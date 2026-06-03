@@ -54,6 +54,44 @@ def record_id(run_id: str, event: str) -> str:
     return f"{run_id}:{event}"
 
 
+def write_gate_opened_record(
+    ledger: LedgerStore | None,
+    *,
+    run_id: str,
+    namespace: str,
+    created_at: str,
+) -> None:
+    if ledger is None:
+        return
+    ledger.upsert(
+        APPROVALS,
+        record_id(run_id, "gate:opened"),
+        {
+            "run_id": run_id,
+            "namespace": namespace,
+            "phase": "gate",
+            "event": "opened",
+            "status": "collecting_evidence",
+            "created_at": created_at,
+            "mutation_allowed": False,
+        },
+    )
+
+
+def write_gate_pending_record(ledger: LedgerStore | None, *, pack: EvidencePack) -> None:
+    if ledger is None:
+        return
+    ledger.upsert(
+        APPROVALS,
+        record_id(pack.run_id, "gate:pending"),
+        _base(pack, phase="gate", event="pending_approval")
+        | {
+            "required_hash": pack.evidence_hash,
+            "mutation_allowed": False,
+        },
+    )
+
+
 def write_diagnosis_records(
     ledger: LedgerStore | None,
     *,
@@ -95,6 +133,7 @@ def write_diagnosis_records(
             "source": source,
         },
     )
+    write_gate_pending_record(ledger, pack=pack)
     write_pack_record(ledger, pack)
 
 

@@ -4,6 +4,8 @@ from pydantic import ValidationError
 from controller.ledger import evidence_hash
 from controller.phases import Phase
 from controller.schemas import (
+    ApprovalGate,
+    ApprovalGateState,
     AgentTraceActor,
     AgentTraceEvent,
     AgentTraceStage,
@@ -165,6 +167,35 @@ def test_agent_trace_event_validates_and_serializes():
     }
 
 
+def test_approval_gate_validates_and_is_immutable():
+    gate = ApprovalGate(
+        gate_id="run-1:gate",
+        state=ApprovalGateState.PENDING_APPROVAL,
+        required_hash="a" * 64,
+        mutation_allowed=False,
+        ledger_ref="approvals/run-1:gate:pending",
+    )
+
+    assert gate.model_dump(mode="json")["state"] == "pending_approval"
+    with pytest.raises(ValidationError):
+        gate.state = ApprovalGateState.APPROVED
+
+
+def test_persisted_pack_rejects_mutation_allowed_gate():
+    base, _, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="mutation_allowed"):
+        EvidencePack(
+            **base,
+            status=PackStatus.DIAGNOSED,
+            approval_gate=ApprovalGate(
+                gate_id="r1:gate",
+                state=ApprovalGateState.PENDING_APPROVAL,
+                required_hash=eh,
+                mutation_allowed=True,
+            ),
+        )
+
+
 def test_agent_trace_requires_summary():
     with pytest.raises(ValidationError):
         AgentTraceEvent(
@@ -219,6 +250,23 @@ def _reject(eh: str) -> Decision:
     return Decision(action=DecisionAction.REJECT, evidence_hash=eh, phase=Phase.APPROVE)
 
 
+def _gate(
+    eh: str,
+    state: ApprovalGateState,
+    *,
+    approved_hash: str | None = None,
+    approver: str | None = None,
+) -> ApprovalGate:
+    return ApprovalGate(
+        gate_id="r1:gate",
+        state=state,
+        required_hash=eh,
+        approved_hash=approved_hash,
+        approver=approver,
+        mutation_allowed=False,
+    )
+
+
 def test_diagnosed_pack_with_decision_is_rejected():
     base, _, eh = _pack_parts()
     with pytest.raises(ValidationError, match="DIAGNOSED"):
@@ -266,3 +314,107 @@ def test_valid_lifecycle_states_are_accepted():
     EvidencePack(**base, status=PackStatus.DIAGNOSED)
     EvidencePack(**base, status=PackStatus.REJECTED, decision=_reject(eh))
     EvidencePack(**base, status=PackStatus.VERIFIED, after=before, decision=_approve(eh))
+
+
+def test_evidence_pack_rejects_tampered_persisted_hash():
+    base, _, _ = _pack_parts()
+    with pytest.raises(ValidationError, match="before-evidence and recommendation"):
+        EvidencePack(**(base | {"evidence_hash": "b" * 64}), status=PackStatus.DIAGNOSED)
+
+
+def test_approval_gate_rejects_hash_mismatches():
+    base, before, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="required_hash"):
+        EvidencePack(
+            **base,
+            status=PackStatus.DIAGNOSED,
+            approval_gate=_gate("b" * 64, ApprovalGateState.PENDING_APPROVAL),
+        )
+    with pytest.raises(ValidationError, match="approved_hash"):
+        EvidencePack(
+            **base,
+            status=PackStatus.VERIFIED,
+            after=before,
+            decision=_approve(eh),
+            approval_gate=_gate(
+                eh, ApprovalGateState.VERIFIED, approved_hash="b" * 64, approver="op"
+            ),
+        )
+
+
+def test_approval_gate_status_table_rejects_invalid_diagnosed_gate():
+    base, _, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="pending approval gate"):
+        EvidencePack(
+            **base,
+            status=PackStatus.DIAGNOSED,
+            approval_gate=_gate(eh, ApprovalGateState.APPROVED, approved_hash=eh, approver="op"),
+        )
+    with pytest.raises(ValidationError, match="require only the current hash"):
+        EvidencePack(
+            **base,
+            status=PackStatus.DIAGNOSED,
+            approval_gate=ApprovalGate(
+                gate_id="r1:gate",
+                state=ApprovalGateState.PENDING_APPROVAL,
+                mutation_allowed=False,
+            ),
+        )
+
+
+def test_approval_gate_status_table_rejects_invalid_rejected_gate():
+    base, _, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="rejected approval gate"):
+        EvidencePack(
+            **base,
+            status=PackStatus.REJECTED,
+            decision=_reject(eh),
+            approval_gate=_gate(eh, ApprovalGateState.PENDING_APPROVAL),
+        )
+    with pytest.raises(ValidationError, match="record the approver"):
+        EvidencePack(
+            **base,
+            status=PackStatus.REJECTED,
+            decision=_reject(eh),
+            approval_gate=_gate(eh, ApprovalGateState.REJECTED),
+        )
+
+
+def test_approval_gate_status_table_rejects_invalid_verified_gate():
+    base, before, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="verified approval gate"):
+        EvidencePack(
+            **base,
+            status=PackStatus.VERIFIED,
+            after=before,
+            decision=_approve(eh),
+            approval_gate=_gate(eh, ApprovalGateState.APPROVED, approved_hash=eh, approver="op"),
+        )
+    with pytest.raises(ValidationError, match="record the approved hash"):
+        EvidencePack(
+            **base,
+            status=PackStatus.VERIFIED,
+            after=before,
+            decision=_approve(eh),
+            approval_gate=_gate(eh, ApprovalGateState.VERIFIED, approver="op"),
+        )
+
+
+def test_approval_gate_status_table_rejects_invalid_approved_gate():
+    base, before, eh = _pack_parts()
+    with pytest.raises(ValidationError, match="approved approval gate"):
+        EvidencePack(
+            **base,
+            status=PackStatus.APPROVED,
+            after=before,
+            decision=_approve(eh),
+            approval_gate=_gate(eh, ApprovalGateState.VERIFIED, approved_hash=eh, approver="op"),
+        )
+    with pytest.raises(ValidationError, match="record the approved hash"):
+        EvidencePack(
+            **base,
+            status=PackStatus.APPROVED,
+            after=before,
+            decision=_approve(eh),
+            approval_gate=_gate(eh, ApprovalGateState.APPROVED),
+        )

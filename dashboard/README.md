@@ -3,7 +3,8 @@
 Operator dashboard for the Evidence-Driven DBRE agent. One route renders an
 **EvidencePack** (the ESR B→C scenario): the 5-stage pipeline, the before/after
 explain comparison, the finding + recommendation, the approval-bound evidence
-hash, Agent Engine/controller trace, and the approve/reject action.
+hash, the first-class approval gate, Agent Engine/controller trace, and the
+approve/reject action.
 
 ## Run
 
@@ -70,11 +71,11 @@ app/
   globals.css       design tokens (palette, fonts) + reset
   page.module.css
 components/
+  ApprovalGatePanel first-viewport human gate + hash-bound approve/reject
   StageIndicator    Detect → Diagnose → Test → Approve → Verify
   TracePanel        EvidencePack hash + Agent Engine/controller/human trace
   PlanPanel         before/after explain (keys examined, stage chain, sort flag)
   EvidencePanel     finding (severity) + recommendation (index spec + rationale)
-  ApproveBar        evidence hash + approve/reject buttons
 lib/
   evidence.ts       EvidencePack v1 types + helpers
   example_pack.json committed sample pack (static data source)
@@ -82,13 +83,18 @@ lib/
 
 ## Live workflow
 
+- The first viewport renders the **Approval Gate**. It is visible before and after
+  diagnosis; during a run it is collecting evidence, then it moves to pending
+  approval with the required hash.
 - **Ask the agent** calls the same-origin `/api/run` proxy, which forwards to the
-  Cloud Run API with the server-side token.
+  Cloud Run API with the server-side token. The backend opens the approval gate
+  first, then asks Agent Engine for read-only diagnosis.
 - The returned pack is `diagnosed`, shown as **pending approval**. No database
-  mutation happens during this step. `agent_trace` shows Agent Engine tool events
-  plus deterministic validation.
+  mutation happens during this step. `agent_trace` starts with `approval_gate/gate`,
+  then shows Agent Engine tool events plus deterministic validation.
 - **Approve fix** posts the displayed `evidence_hash` through the same-origin
-  decision proxy. The backend applies and verifies the index only after that
-  hash-bound approval.
+  decision proxy. The backend issues a one-time approval ticket and applies/verifies
+  the index only after that hash-bound approval. If the API is not configured, the
+  UI shows an error and does not fake a saved decision.
 - The trace panel and footer show when the pack came from the live API, where the
   EvidencePack aggregate and internal ledger event collections are persisted.

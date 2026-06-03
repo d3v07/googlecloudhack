@@ -13,19 +13,22 @@ The dashboard consumes `EvidencePack` JSON — via this schema and the read endp
 
 ## EvidencePack shape (v1)
 
-`version`, `run_id`, `namespace`, `status` (`diagnosed` / `approved` / `verified` / `rejected`), `before` (Evidence), `after` (Evidence | null), `finding`, `recommendation` (ordered `[field, direction]` index keys), `decision` (null until approved), `phase_log`, `agent_trace`, `evidence_hash`, `created_at`.
+`version`, `run_id`, `namespace`, `status` (`diagnosed` / `approved` / `verified` / `rejected`), `before` (Evidence), `after` (Evidence | null), `finding`, `recommendation` (ordered `[field, direction]` index keys), `decision` (null until approved), `phase_log`, `agent_trace`, `approval_gate`, `evidence_hash`, `created_at`.
 
 `evidence_hash` binds `before` + `recommendation` together — it pins *what gets applied given what evidence*, which is what a human approval signs off on. When `decision` is present its `evidence_hash` must equal the pack's.
 
-`agent_trace` is the dashboard-visible proof trail for the intended architecture:
-Agent Engine native tool events, deterministic validation, human approval, apply, and verify.
+`approval_gate` is the dashboard-visible control plane: `/run` opens it before
+diagnosis, moves it to `pending_approval` with the required hash, and the decision
+route closes it as rejected or verified. `agent_trace` must start with the
+`approval_gate/gate` event, then record Agent Engine native tool events, deterministic
+validation, human approval, apply, and verify.
 
 ## Regenerate
 
 After changing the `EvidencePack` model:
 
 ```bash
-PYTHONPATH=. uv run python contracts/_generate.py
+uv run python contracts/_generate.py
 ```
 
 The contract test fails if the committed schema drifts from the model.

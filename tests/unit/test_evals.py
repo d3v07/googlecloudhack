@@ -15,6 +15,8 @@ from evals.grade import (
     EXPECTED_TARGET_INDEXES,
     Scorecard,
     grade_agent_engine_used,
+    grade_approval_gate_first,
+    grade_approval_gate_records,
     grade_approval_verified,
     grade_esr_correct,
     grade_ledger_records,
@@ -95,6 +97,7 @@ def test_latency_recorded():
 def test_agent_engine_path_requires_native_tool_trace():
     pack = {
         "agent_trace": [
+            {"actor": "approval_gate", "stage": "gate", "tool": "approval_gate"},
             {"actor": "agent_engine", "tool": "explain_slow_query"},
             {"actor": "agent_engine", "tool": "compare_candidate_indexes"},
             {"actor": "agent_engine", "tool": "diagnose_candidate"},
@@ -104,6 +107,31 @@ def test_agent_engine_path_requires_native_tool_trace():
     }
     assert grade_agent_engine_used(pack).passed
     assert not grade_agent_engine_used({"phase_log": [{"note": "agent_engine=resource"}]}).passed
+
+
+def test_approval_gate_first_requires_first_trace_and_pending_gate():
+    pack = {
+        "evidence_hash": "a" * 64,
+        "approval_gate": {
+            "state": "pending_approval",
+            "required_hash": "a" * 64,
+            "mutation_allowed": False,
+        },
+        "agent_trace": [{"actor": "approval_gate", "stage": "gate"}],
+    }
+    assert grade_approval_gate_first(pack).passed
+
+    drifted = {**pack, "agent_trace": [{"actor": "agent_engine", "stage": "detect"}]}
+    assert not grade_approval_gate_first(drifted).passed
+
+
+def test_approval_gate_ledger_records_require_opened_and_pending():
+    records = {
+        "gate_opened": {"mutation_allowed": False},
+        "gate_pending": {"mutation_allowed": False},
+    }
+    assert grade_approval_gate_records(records).passed
+    assert not grade_approval_gate_records({"gate_opened": {"mutation_allowed": False}}).passed
 
 
 def test_no_mutation_before_approval_compares_indexes():

@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from controller.schemas import EvidencePack, PackStatus
+from controller.orchestrator import ApprovalTicket, issue_approval_ticket
+from controller.schemas import ApprovalGateState, EvidencePack, PackStatus
 
 router = APIRouter()
 
@@ -32,7 +33,7 @@ class Engine(Protocol):
 
     async def diagnose(self, run_id: str) -> EvidencePack: ...
     async def apply_and_verify(
-        self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
+        self, pack: EvidencePack, ticket: ApprovalTicket
     ) -> EvidencePack: ...
     def reject(
         self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
@@ -110,9 +111,33 @@ async def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep, engin
             status_code=409,
             content={"error": "stale_evidence_hash", "current_hash": pack.evidence_hash},
         )
+    if (
+        pack.approval_gate is None
+        or pack.approval_gate.state is not ApprovalGateState.PENDING_APPROVAL
+    ):
+        return JSONResponse(
+            status_code=409,
+            content={"error": "approval_gate", "detail": "pending approval gate required"},
+        )
     if body.decision == "approve":
-        updated = await engine.apply_and_verify(pack, approver=body.approver, note=body.note)
+        try:
+            ticket = issue_approval_ticket(
+                pack,
+                evidence_hash=body.evidence_hash,
+                approver=body.approver,
+                note=body.note,
+            )
+        except ValueError as exc:
+            return JSONResponse(
+                status_code=409, content={"error": "approval_gate", "detail": str(exc)}
+            )
+        updated = await engine.apply_and_verify(pack, ticket)
     else:
-        updated = engine.reject(pack, approver=body.approver, note=body.note)
+        try:
+            updated = engine.reject(pack, approver=body.approver, note=body.note)
+        except ValueError as exc:
+            return JSONResponse(
+                status_code=409, content={"error": "approval_gate", "detail": str(exc)}
+            )
     store.save_pack(updated)
     return updated.model_dump(mode="json")

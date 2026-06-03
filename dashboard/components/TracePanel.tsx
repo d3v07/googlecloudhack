@@ -4,6 +4,8 @@ import styles from "./TracePanel.module.css";
 
 function actorLabel(actor: AgentTraceEvent["actor"]): string {
   switch (actor) {
+    case "approval_gate":
+      return "Approval Gate";
     case "agent_engine":
       return "Agent Engine";
     case "deterministic_controller":
@@ -58,7 +60,10 @@ export function TracePanel({
           </li>
         ) : (
           trace.map((event, index) => (
-            <li key={`${event.stage}-${event.actor}-${event.tool ?? index}`} className={styles.traceItem}>
+            <li
+              key={`${event.stage}-${event.actor}-${event.tool ?? index}`}
+              className={styles.traceItem}
+            >
               <span className={styles.traceState} data-status={event.status}>
                 {event.status === "ok" ? <CheckCircle weight="fill" size={16} /> : <Warning size={16} />}
               </span>

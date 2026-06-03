@@ -10,7 +10,7 @@ import pytest
 
 from controller.backends import PymongoBackend
 from controller.explain import get_connection_string
-from controller.orchestrator import apply_and_verify, run_diagnosis
+from controller.orchestrator import apply_and_verify, issue_approval_ticket, run_diagnosis
 from controller.pack import pack_evidence_hash
 from controller.schemas import EvidencePack, PackStatus
 
@@ -58,6 +58,11 @@ def test_live_two_phase_diagnose_then_approve_verify():
             apply_and_verify(
                 backend,
                 diagnosed,
+                issue_approval_ticket(
+                    diagnosed,
+                    evidence_hash=diagnosed.evidence_hash,
+                    approver="integration-test",
+                ),
                 query_filter=QUERY_FILTER,
                 query_sort=QUERY_SORT,
                 limit=LIMIT,

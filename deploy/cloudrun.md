@@ -71,9 +71,10 @@ in the repo root and push the image to Artifact Registry automatically.
 > the client bundle.
 >
 > **Agent Engine:** `AGENT_ENGINE_RESOURCE` is required for deploy. `/run` uses that
-> resource as the native read-only diagnosis/rationale layer, then the deterministic
-> controller validates and emits the DIAGNOSED EvidencePack. `MONGO_SECRET_NAME` is also
-> required; production must read MongoDB credentials from Secret Manager.
+> resource as the native read-only diagnosis/rationale layer. The API opens the
+> approval gate first, Agent Engine gathers evidence, then the deterministic
+> controller validates and emits the DIAGNOSED EvidencePack. `MONGO_SECRET_NAME` is
+> also required; production must read MongoDB credentials from Secret Manager.
 
 ### What the script does
 
@@ -122,9 +123,10 @@ curl -sf "${SERVICE_URL}/packs/RUN_ID"
 ```bash
 curl -sf -X POST "${SERVICE_URL}/run" \
   -H "Content-Type: application/json" -H "X-API-Token: ${RUN_API_TOKEN}" -d '{}'
-# Expected: 200 + a DIAGNOSED EvidencePack (run_id "run-…", before≈17209 keys, blocking sort,
-# severity high, recommendation, agent_trace with Agent Engine tool events). No index is
-# applied yet. (401 without a valid X-API-Token.)
+# Expected: 200 + a DIAGNOSED EvidencePack (run_id "run-…", approval_gate
+# pending_approval, first agent_trace event approval_gate/gate, before≈17209 keys,
+# blocking sort, severity high, recommendation, Agent Engine tool events). No index
+# is applied yet. (401 without a valid X-API-Token.)
 ```
 
 **Approve → apply + verify (the human-gated mutation):**
@@ -132,14 +134,16 @@ curl -sf -X POST "${SERVICE_URL}/run" \
 curl -sf -X POST "${SERVICE_URL}/packs/RUN_ID/decision" \
   -H "Content-Type: application/json" -H "X-API-Token: ${RUN_API_TOKEN}" \
   -d '{"decision": "approve", "evidence_hash": "<hash-from-pack>"}'
-# Applies the recommended index and verifies → 200 + a VERIFIED pack (after≈64 keys, no sort).
+# Issues a hash-bound approval ticket, applies the recommended index, and verifies
+# → 200 + a VERIFIED pack (after≈64 keys, no sort).
 # 409 stale_evidence_hash if the hash doesn't match; 409 already_decided if not DIAGNOSED.
 ```
 
-**Ledger records:** a completed approve flow creates or updates one deterministic
-record for the run in each internal collection: `slow_queries`, `candidates`,
+**Ledger records:** a completed approve flow creates or updates deterministic
+records for the run in each internal collection: `slow_queries`, `candidates`,
 `experiments`, `decisions`, `evidence_packs`, `approvals`, `applications`, and
-`verifications`.
+`verifications`. The `approvals` collection includes `gate:opened` and
+`gate:pending` records from `/run` before any mutation.
 
 ---
 

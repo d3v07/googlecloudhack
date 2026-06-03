@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from api.agent_engine import AgentEngineDiagnosisClient
 from api.routes import Engine, PackStore, get_engine, get_store, router
 from controller.ledger_store import LedgerStore, MongoLedgerStore
-from controller.orchestrator import DiagnosisAgent
+from controller.orchestrator import ApprovalTicket, DiagnosisAgent
 from controller.persistence import load_pack, read_pack, save_pack, write_pack
 from controller.schemas import EvidencePack
 
@@ -107,9 +107,7 @@ class _LiveEngine:  # pragma: no cover - live
         finally:
             backend.close()
 
-    async def apply_and_verify(
-        self, pack: EvidencePack, *, approver: str = "dashboard-operator", note: str = ""
-    ) -> EvidencePack:
+    async def apply_and_verify(self, pack: EvidencePack, ticket: ApprovalTicket) -> EvidencePack:
         from controller.demo_fixture import LIMIT, QUERY_FILTER, QUERY_SORT
         from controller.orchestrator import apply_and_verify
 
@@ -121,8 +119,7 @@ class _LiveEngine:  # pragma: no cover - live
                 query_filter=QUERY_FILTER,
                 query_sort=QUERY_SORT,
                 limit=LIMIT,
-                approver=approver,
-                note=note,
+                approval_ticket=ticket,
                 ledger=self._ledger,
             )
         finally:
@@ -141,6 +138,10 @@ def create_app(store: PackStore | None = None, engine: Engine | None = None) -> 
 
     if store is None:
         if os.getenv("MONGO_SECRET_NAME"):  # pragma: no cover - live
+            if not os.getenv("RUN_API_TOKEN"):
+                raise RuntimeError(
+                    "RUN_API_TOKEN is required when MONGO_SECRET_NAME enables live Mongo mode"
+                )
             from pymongo import MongoClient  # noqa: PLC0415
 
             from api.secrets import get_mongo_connection_string  # noqa: PLC0415

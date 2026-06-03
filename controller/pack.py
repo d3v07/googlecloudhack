@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 from controller.ledger import evidence_hash
 from controller.schemas import (
+    ApprovalGate,
     Decision,
     Evidence,
     EvidencePack,
@@ -36,6 +37,7 @@ def build_pack(
     decision: Decision | None = None,
     phase_log: Sequence[PhaseTransition] = (),
     agent_trace: Sequence[AgentTraceEvent] = (),
+    approval_gate: ApprovalGate | None = None,
     narrative: str | None = None,
 ) -> EvidencePack:
     return EvidencePack(
@@ -50,6 +52,7 @@ def build_pack(
         decision=decision,
         phase_log=tuple(phase_log),
         agent_trace=tuple(agent_trace),
+        approval_gate=approval_gate,
         evidence_hash=pack_evidence_hash(before, recommendation),
         narrative=narrative,
     )

@@ -1,6 +1,6 @@
 {
-  "mode": "deterministic+demo-pack+diagram-live",
-  "summary": "12/12 checks passed",
+  "mode": "deterministic",
+  "summary": "2/2 checks passed",
   "passed": true,
   "checks": [
     {
@@ -12,56 +12,6 @@
       "name": "phase_gate",
       "passed": true,
       "detail": "create-index blocked in diagnose=True, drop-index blocked in approve=True, create-index allowed in verify=True"
-    },
-    {
-      "name": "demo_pack",
-      "passed": true,
-      "detail": "loaded demo-001 (Gemini narrative present)"
-    },
-    {
-      "name": "esr_correct",
-      "passed": true,
-      "detail": "recommended ESR index C: (('storeLocation', 1), ('saleDate', -1), ('customer.age', 1))"
-    },
-    {
-      "name": "narrative_grounded",
-      "passed": true,
-      "detail": "mentions blocking sort=True; numbers cited=none; fabricated=none"
-    },
-    {
-      "name": "diagram_live",
-      "passed": true,
-      "detail": "completed run_id=eval-diagram-1780429588"
-    },
-    {
-      "name": "agent_engine_path",
-      "passed": true,
-      "detail": "Agent Engine note present"
-    },
-    {
-      "name": "no_mutation_before_approval",
-      "passed": true,
-      "detail": "target indexes unchanged after /run"
-    },
-    {
-      "name": "ledger_records_exist",
-      "passed": true,
-      "detail": "all expected collections present: ['applications', 'approvals', 'candidates', 'decisions', 'evidence_packs', 'experiments', 'slow_queries', 'verifications']"
-    },
-    {
-      "name": "approval_verifies_esr_fix",
-      "passed": true,
-      "detail": "diagnosed=diagnosed; verified=verified; hash_unchanged=True; keys=17209->64; sort_after=False"
-    },
-    {
-      "name": "no_extra_indexes",
-      "passed": true,
-      "detail": "target indexes clean: ['_id_', 'esr_right_C', 'esr_wrong_B']"
-    },
-    {
-      "name": "latency_recorded",
-      "passed": true,
-      "detail": "end-to-end 57.77s"
     }
   ]
 }

@@ -36,3 +36,4 @@ mongo-build-plan.md
 # local agent worktrees / tooling state
 .claude/
 .codex/
+.gstack/
