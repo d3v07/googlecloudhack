@@ -1,4 +1,8 @@
-from controller.explain import capture_evidence, get_connection_string
+import sys
+
+import pytest
+
+from controller.explain import _secret_project, capture_evidence, get_connection_string
 
 
 class _FakeCursor:
@@ -76,7 +80,44 @@ def test_capture_evidence_handles_branching_input_stages():
 def test_get_connection_string_reads_known_env_vars(monkeypatch):
     monkeypatch.delenv("MDB_MCP_CONNECTION_STRING", raising=False)
     monkeypatch.delenv("MONGODB_TARGET_URI", raising=False)
+    monkeypatch.delenv("MONGO_SECRET_NAME", raising=False)
     assert get_connection_string() is None
 
     monkeypatch.setenv("MONGODB_TARGET_URI", "mongodb+srv://example/")
     assert get_connection_string() == "mongodb+srv://example/"
+
+
+def test_get_connection_string_reads_secret_manager(monkeypatch):
+    monkeypatch.delenv("MDB_MCP_CONNECTION_STRING", raising=False)
+    monkeypatch.delenv("MONGODB_TARGET_URI", raising=False)
+    monkeypatch.setenv("MONGO_SECRET_NAME", "mongo-uri")
+    monkeypatch.setenv("MONGO_SECRET_VERSION", "7")
+    monkeypatch.setenv("GCRAH_AGENT_PROJECT", "performer-497915")
+
+    calls = []
+
+    class _Payload:
+        data = b"mongodb+srv://from-secret/"
+
+    class _Response:
+        payload = _Payload()
+
+    class _Client:
+        def access_secret_version(self, *, name):
+            calls.append(name)
+            return _Response()
+
+    class _SecretManagerModule:
+        SecretManagerServiceClient = _Client
+
+    monkeypatch.setitem(sys.modules, "google.cloud.secretmanager", _SecretManagerModule)
+
+    assert get_connection_string() == "mongodb+srv://from-secret/"
+    assert calls == ["projects/performer-497915/secrets/mongo-uri/versions/7"]
+
+
+def test_secret_project_raises_when_no_project_env(monkeypatch):
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    monkeypatch.delenv("GCRAH_AGENT_PROJECT", raising=False)
+    with pytest.raises(RuntimeError, match="GOOGLE_CLOUD_PROJECT"):
+        _secret_project()

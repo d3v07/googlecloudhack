@@ -59,7 +59,7 @@ GOOGLE_CLOUD_LOCATION=us-central1
 GEMINI_MODEL=gemini-2.5-flash
 GOOGLE_CLOUD_STAGING_BUCKET=gs://performer-497915-agent-engine-staging
 MONGO_SECRET_NAME=mongodb-connection-string
-# MONGODB_TARGET_URI is injected into Agent Engine from Secret Manager, not stored here.
+# Agent Engine reads this secret at tool-call time with its Agent Identity.
 ```
 
 ## Deploy
@@ -92,9 +92,10 @@ The deploy uses the official ADK object deploy path:
 - deployed object: `vertexai.agent_engines.AdkApp(agent=build_agent(...))`
 - extra packages: `controller/`, `agents/`
 - requirements: runtime package list in `agents/deploy.py`
-- runtime identity: Agent Identity, with `MONGODB_TARGET_URI` injected from Secret Manager
+- runtime identity: Agent Identity, with MongoDB read from Secret Manager by name
 - runtime env: non-reserved `GCRAH_AGENT_PROJECT` / `GCRAH_AGENT_LOCATION` seed
-  the ADK app initialization; Google-reserved `GOOGLE_CLOUD_PROJECT` is not set by the deploy script
+  the ADK app initialization, and `MONGO_SECRET_NAME` / `MONGO_SECRET_VERSION` identify the
+  MongoDB URI secret. Google-reserved `GOOGLE_CLOUD_PROJECT` is not set by the deploy script.
 
 Expected output:
 

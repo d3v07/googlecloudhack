@@ -20,6 +20,7 @@ from agents.agent_engine_factory import build_adk_app
 _REQUIREMENTS = [
     "google-cloud-aiplatform[agent_engines]>=1.112",
     "google-adk>=2.1.0",
+    "google-cloud-secret-manager>=2.20",
     "pydantic>=2.0",
     "pymongo>=4.6",
     "cloudpickle>=3.0",
@@ -51,7 +52,8 @@ def _agent_env_vars(
     return {
         "GCRAH_AGENT_PROJECT": project or os.environ.get("GOOGLE_CLOUD_PROJECT", ""),
         "GCRAH_AGENT_LOCATION": location or os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
-        "MONGODB_TARGET_URI": {"secret": secret_name, "version": secret_version},
+        "MONGO_SECRET_NAME": secret_name,
+        "MONGO_SECRET_VERSION": secret_version,
         "GEMINI_MODEL": os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
     }
 
@@ -68,7 +70,7 @@ def deploy() -> str:  # pragma: no cover - live deploy
     print(f"PROJECT={project}")
     print(f"LOCATION={location}")
     print(f"STAGING_BUCKET={staging_bucket}")
-    print(f"MONGO_SECRET_NAME={env_vars['MONGODB_TARGET_URI']['secret']}")
+    print(f"MONGO_SECRET_NAME={env_vars['MONGO_SECRET_NAME']}")
 
     app = build_adk_app(project, location)
     client = vertexai.Client(project=project, location=location)
