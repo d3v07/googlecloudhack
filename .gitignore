@@ -31,7 +31,9 @@ node_modules/
 
 # internal — kept local, not pushed to the shared repo
 HANDOFF.md
-docs/
+docs/*
+# safety-boundary decisions are a tracked governance artifact; the rest of docs/ stays local
+!docs/safety-boundary-decisions.md
 mongo-build-plan.md
 
 # local agent worktrees / tooling state
