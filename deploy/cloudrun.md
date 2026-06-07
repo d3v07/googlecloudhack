@@ -60,6 +60,7 @@ export AGENT_ENGINE_DIAGNOSE_RESOURCE=projects/782567466199/locations/us-central
 export AGENT_ENGINE_CANDIDATE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/CANDIDATE_ENGINE_ID
 export AGENT_ENGINE_RATIONALE_RESOURCE=projects/782567466199/locations/us-central1/reasoningEngines/RATIONALE_ENGINE_ID
 export RUN_API_TOKEN=$(openssl rand -hex 16)   # gates the write endpoints; reads stay public
+export SESSION_SECRET=$(openssl rand -hex 32)  # verifies dashboard session tokens — use the SAME value on the dashboard
 bash deploy/deploy_cloudrun.sh
 ```
 

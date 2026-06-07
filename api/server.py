@@ -5,7 +5,16 @@ from typing import Any
 from fastapi import FastAPI
 
 from api.agent_engine import AgentDiagnosisParseError, diagnosis_agent_from_env
-from api.routes import Engine, PackStore, get_engine, get_store, router
+from api.auth import AuthStore, MongoUserStore, auth_router, get_auth_store
+from api.routes import Engine, PackStore, QueryInput, get_engine, get_store, router
+from api.workload import (
+    MongoWorkloadService,
+    WorkloadService,
+    get_workload_service,
+    get_workload_service_optional,
+    workload_router,
+)
+from controller.workload import NAMESPACE_COLL, NAMESPACE_DB
 from controller.ledger_store import LedgerStore, MongoLedgerStore
 from controller.orchestrator import ApprovalTicket, DiagnosisAdvice, DiagnosisAgent
 from controller.persistence import load_pack, read_pack, save_pack, write_pack
@@ -116,9 +125,17 @@ class _LiveEngine:  # pragma: no cover - live
 
         return PymongoBackend(self._conn, DB, COLL)
 
-    async def diagnose(self, run_id: str) -> EvidencePack:
+    async def diagnose(self, run_id: str, query: QueryInput | None = None) -> EvidencePack:
         from controller.demo_fixture import COLL, DB, LIMIT, QUERY_FILTER, QUERY_SORT
-        from controller.orchestrator import run_agent_diagnosis, run_diagnosis
+        from controller.orchestrator import INDEX_B_NAME, run_agent_diagnosis, run_diagnosis
+
+        namespace = f"{DB}.{COLL}"
+        if query is not None:
+            query_filter, query_sort, limit = query.query_filter, query.query_sort, query.limit
+            current_index = None  # real captured query: diagnose its natural plan, no forced hint
+        else:
+            query_filter, query_sort, limit = QUERY_FILTER, QUERY_SORT, LIMIT
+            current_index = INDEX_B_NAME
 
         agent_failure: Exception | None = None
         if self._diagnosis_agent is not None:
@@ -126,11 +143,12 @@ class _LiveEngine:  # pragma: no cover - live
                 return await run_agent_diagnosis(
                     self._diagnosis_agent,
                     run_id=run_id,
-                    namespace=f"{DB}.{COLL}",
-                    query_filter=QUERY_FILTER,
-                    query_sort=QUERY_SORT,
-                    limit=LIMIT,
+                    namespace=namespace,
+                    query_filter=query_filter,
+                    query_sort=query_sort,
+                    limit=limit,
                     ledger=self._ledger,
+                    current_index=current_index,
                 )
             except AgentDiagnosisParseError as exc:
                 if not self._allow_agent_fallback:
@@ -142,10 +160,11 @@ class _LiveEngine:  # pragma: no cover - live
             return await run_diagnosis(
                 backend,
                 run_id=run_id,
-                namespace=f"{DB}.{COLL}",
-                query_filter=QUERY_FILTER,
-                query_sort=QUERY_SORT,
-                limit=LIMIT,
+                namespace=namespace,
+                query_filter=query_filter,
+                query_sort=query_sort,
+                limit=limit,
+                current_index=current_index,
                 advisor=(
                     _AgentFailureAdvisor(self._diagnosis_agent, agent_failure)
                     if self._diagnosis_agent is not None and agent_failure is not None
@@ -157,17 +176,24 @@ class _LiveEngine:  # pragma: no cover - live
             backend.close()
 
     async def apply_and_verify(self, pack: EvidencePack, ticket: ApprovalTicket) -> EvidencePack:
-        from controller.demo_fixture import LIMIT, QUERY_FILTER, QUERY_SORT
         from controller.orchestrator import apply_and_verify
+
+        # Re-run the SAME query the pack was diagnosed with (captured or fixture). model_dump thaws
+        # the frozen before-evidence: pack.before.query holds mappingproxy nodes that pymongo cannot
+        # deep-copy into a filter, so we read the serialized (plain dict/list) form instead.
+        spec = pack.before.model_dump(mode="python")["query"]
+        query_filter = dict(spec.get("filter", {}))
+        query_sort = [(field, int(direction)) for field, direction in spec.get("sort", [])]
+        limit = int(spec.get("limit", 20))
 
         backend = self._backend()
         try:
             return await apply_and_verify(
                 backend,
                 pack,
-                query_filter=QUERY_FILTER,
-                query_sort=QUERY_SORT,
-                limit=LIMIT,
+                query_filter=query_filter,
+                query_sort=query_sort,
+                limit=limit,
                 approval_ticket=ticket,
                 ledger=self._ledger,
             )
@@ -182,29 +208,51 @@ class _LiveEngine:  # pragma: no cover - live
         return reject_pack(pack, approver=approver, note=note, ledger=self._ledger)
 
 
-def create_app(store: PackStore | None = None, engine: Engine | None = None) -> FastAPI:
+def create_app(
+    store: PackStore | None = None,
+    engine: Engine | None = None,
+    auth_store: AuthStore | None = None,
+    workload_service: WorkloadService | None = None,
+) -> FastAPI:
     app = FastAPI(title="GCRAH Evidence Pack API")
 
     if store is None:
-        if os.getenv("MONGO_SECRET_NAME"):  # pragma: no cover - live
-            if not os.getenv("RUN_API_TOKEN"):
+        secret_mode = bool(os.getenv("MONGO_SECRET_NAME"))
+        local_mode = bool(os.getenv("MDB_MCP_CONNECTION_STRING"))
+        if secret_mode or local_mode:  # pragma: no cover - live
+            if secret_mode and not os.getenv("RUN_API_TOKEN"):
                 raise RuntimeError(
                     "RUN_API_TOKEN is required when MONGO_SECRET_NAME enables live Mongo mode"
+                )
+            if secret_mode and not os.getenv("SESSION_SECRET"):
+                # Fail closed: without it, optional_dbre_identity no-ops and the approver would
+                # fall back to the request body — role + approver authority must be structural.
+                raise RuntimeError(
+                    "SESSION_SECRET is required in production to enforce the DBRE role and the "
+                    "session-derived approver on the mutating endpoints"
                 )
             from pymongo import MongoClient  # noqa: PLC0415
 
             from api.secrets import get_mongo_connection_string  # noqa: PLC0415
 
             conn = get_mongo_connection_string()
-            state_db = MongoClient(conn)["dbre_state"]
-            collection = state_db["evidence_packs"]
-            store = MongoPackStore(collection)
+            client = MongoClient(conn)
+            state_db = client["dbre_state"]
+            store = MongoPackStore(state_db["evidence_packs"])
+            if auth_store is None:
+                auth_store = MongoUserStore(state_db["users"])
+            if workload_service is None:
+                target = client[NAMESPACE_DB][NAMESPACE_COLL]
+                workload_service = MongoWorkloadService(target, state_db["query_log"])
             if engine is None:
-                engine = _LiveEngine(
-                    conn,
-                    diagnosis_agent_from_env(require_split=True, allow_legacy=False),
-                    MongoLedgerStore(state_db),
+                # Production requires the split Agent Engine; a local connection runs the
+                # deterministic controller (no Vertex), which still produces a valid pack.
+                agent = (
+                    diagnosis_agent_from_env(require_split=True, allow_legacy=False)
+                    if secret_mode
+                    else None
                 )
+                engine = _LiveEngine(conn, agent, MongoLedgerStore(state_db))
         else:
             packs_dir = Path(os.getenv("PACKS_DIR", "runs"))
             store = LocalFilePackStore(packs_dir) if packs_dir.exists() else _EmptyPackStore()
@@ -212,7 +260,14 @@ def create_app(store: PackStore | None = None, engine: Engine | None = None) -> 
     app.dependency_overrides[get_store] = lambda: store
     if engine is not None:
         app.dependency_overrides[get_engine] = lambda: engine
+    if auth_store is not None:
+        app.dependency_overrides[get_auth_store] = lambda: auth_store
+    if workload_service is not None:
+        app.dependency_overrides[get_workload_service] = lambda: workload_service
+        app.dependency_overrides[get_workload_service_optional] = lambda: workload_service
     app.include_router(router)
+    app.include_router(auth_router)
+    app.include_router(workload_router)
     return app
 
 

@@ -390,7 +390,7 @@ async def run_diagnosis(
     narrator: Narrator | None = None,
     advisor: DiagnosisAdvisor | None = None,
     ledger: LedgerStore | None = None,
-    current_index: str = INDEX_B_NAME,
+    current_index: str | None = INDEX_B_NAME,
 ) -> EvidencePack:
     """Read-only DIAGNOSE phase. Returns a DIAGNOSED pack with NO decision and NO mutation —
     the human approves (via the API) before anything is applied. The before-explain hints the
@@ -482,7 +482,7 @@ async def run_agent_diagnosis(
     created_at: str | None = None,
     narrator: Narrator | None = None,
     ledger: LedgerStore | None = None,
-    current_index: str = INDEX_B_NAME,
+    current_index: str | None = INDEX_B_NAME,
 ) -> EvidencePack:
     created_at = created_at or _now()
     write_gate_opened_record(

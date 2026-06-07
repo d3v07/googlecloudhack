@@ -2,6 +2,11 @@
   min-height: 100vh;
 }
 
+/* unauthenticated routes (login) render full-width with no sidebar */
+.bare {
+  min-height: 100vh;
+}
+
 /* content sits to the right of the fixed 248px sidebar on desktop */
 .content {
   margin-left: 248px;

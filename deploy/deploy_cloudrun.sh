@@ -38,6 +38,9 @@ MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-}"
 # Shared secret gating the write endpoints (POST /run, /decision). Reads stay public.
 # Required for production deploy: export RUN_API_TOKEN=$(openssl rand -hex 16)
 RUN_API_TOKEN="${RUN_API_TOKEN:-}"
+# Signs/verifies the session token shared with the dashboard (must match the dashboard's value).
+# Required for the two-persona login: export SESSION_SECRET=$(openssl rand -hex 32)
+SESSION_SECRET="${SESSION_SECRET:-}"
 AGENT_ENGINE_DIAGNOSE_RESOURCE="${AGENT_ENGINE_DIAGNOSE_RESOURCE:-}"
 AGENT_ENGINE_CANDIDATE_RESOURCE="${AGENT_ENGINE_CANDIDATE_RESOURCE:-}"
 AGENT_ENGINE_RATIONALE_RESOURCE="${AGENT_ENGINE_RATIONALE_RESOURCE:-}"
@@ -62,6 +65,11 @@ if [ -z "${MONGO_SECRET_NAME}" ]; then
   echo "Set it with: export MONGO_SECRET_NAME=mongodb-connection-string"
   exit 1
 fi
+if [ -z "${SESSION_SECRET}" ]; then
+  echo "ERROR: SESSION_SECRET is required so the read API can verify dashboard session tokens."
+  echo "Set it with: export SESSION_SECRET=\$(openssl rand -hex 32)  (same value as the dashboard)"
+  exit 1
+fi
 
 echo "==> Granting Secret Manager accessor role to ${SERVICE_ACCOUNT}"
 gcloud secrets add-iam-policy-binding "${MONGO_SECRET_NAME}" \
@@ -79,7 +87,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --project "${GCP_PROJECT}" \
   --allow-unauthenticated \
   --service-account "${SERVICE_ACCOUNT}" \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME},RUN_API_TOKEN=${RUN_API_TOKEN},AGENT_ENGINE_DIAGNOSE_RESOURCE=${AGENT_ENGINE_DIAGNOSE_RESOURCE},AGENT_ENGINE_CANDIDATE_RESOURCE=${AGENT_ENGINE_CANDIDATE_RESOURCE},AGENT_ENGINE_RATIONALE_RESOURCE=${AGENT_ENGINE_RATIONALE_RESOURCE}" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME},RUN_API_TOKEN=${RUN_API_TOKEN},SESSION_SECRET=${SESSION_SECRET},AGENT_ENGINE_DIAGNOSE_RESOURCE=${AGENT_ENGINE_DIAGNOSE_RESOURCE},AGENT_ENGINE_CANDIDATE_RESOURCE=${AGENT_ENGINE_CANDIDATE_RESOURCE},AGENT_ENGINE_RATIONALE_RESOURCE=${AGENT_ENGINE_RATIONALE_RESOURCE}" \
   --port 8080 \
   --min-instances 0 \
   --max-instances 3 \

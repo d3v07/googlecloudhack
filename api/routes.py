@@ -1,5 +1,6 @@
 import os
 import secrets
+from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol
 from uuid import uuid4
 
@@ -7,7 +8,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from api.auth import optional_dbre_identity
+from api.workload import WorkloadService, get_workload_service_optional
+from controller.auth import Identity
 from controller.orchestrator import ApprovalTicket, issue_approval_ticket
+from controller.workload import WorkloadSpecError, assert_safe_query
 from controller.schemas import ApprovalGateState, EvidencePack, PackStatus
 
 router = APIRouter()
@@ -27,11 +32,20 @@ class PackStore(Protocol):
     def save_pack(self, pack: EvidencePack) -> None: ...
 
 
+@dataclass(frozen=True)
+class QueryInput:
+    """A real captured query to diagnose, in place of the preset demo fixture."""
+
+    query_filter: dict
+    query_sort: list[tuple[str, int]]
+    limit: int
+
+
 class Engine(Protocol):
     """Executes the remediation phases against the live target. diagnose() is read-only;
     apply_and_verify() performs the human-approved index mutation; reject() is a no-op record."""
 
-    async def diagnose(self, run_id: str) -> EvidencePack: ...
+    async def diagnose(self, run_id: str, query: QueryInput | None = None) -> EvidencePack: ...
     async def apply_and_verify(
         self, pack: EvidencePack, ticket: ApprovalTicket
     ) -> EvidencePack: ...
@@ -72,16 +86,44 @@ def get_pack(run_id: str, store: StoreDep) -> dict:
 
 class RunRequest(BaseModel):
     run_id: str | None = None
+    captured_query_id: str | None = None
+
+
+WorkloadOptionalDep = Annotated[WorkloadService | None, Depends(get_workload_service_optional)]
 
 
 @router.post("/run", dependencies=[Depends(require_write_token)])
-async def trigger_run(store: StoreDep, engine: EngineDep, body: RunRequest | None = None) -> dict:
-    """Trigger a DIAGNOSE-only live run over the preset demo fixture (#37). Returns a
-    DIAGNOSED pack — NO database mutation happens here. The recommended index is applied only
-    after a human approves via POST /packs/{run_id}/decision. Synchronous (a few seconds,
-    longer on a cold start); pass {"run_id": "..."} only to pin the id."""
+async def trigger_run(
+    store: StoreDep,
+    engine: EngineDep,
+    workload: WorkloadOptionalDep,
+    _identity: Annotated[Identity | None, Depends(optional_dbre_identity)],
+    body: RunRequest | None = None,
+) -> dict:
+    """Trigger a DIAGNOSE-only run. With a captured_query_id, diagnoses that real captured query
+    against its natural plan; otherwise the preset demo fixture. NO mutation happens here — a human
+    approves via POST /packs/{run_id}/decision before any index is applied. The DBRE role is
+    enforced when SESSION_SECRET is configured."""
     run_id = (body.run_id if body else None) or f"run-{uuid4().hex[:8]}"
-    pack = await engine.diagnose(run_id)
+    captured_id = body.captured_query_id if body else None
+    query: QueryInput | None = None
+    if captured_id is not None:
+        if workload is None:
+            raise HTTPException(status_code=503, detail="workload service not configured")
+        captured = workload.get_captured(captured_id)
+        if captured is None:
+            raise HTTPException(status_code=404, detail=f"captured query '{captured_id}' not found")
+        spec = captured["query"]
+        query = QueryInput(
+            query_filter=dict(spec["filter"]),
+            query_sort=[(field, int(direction)) for field, direction in spec["sort"]],
+            limit=int(spec["limit"]),
+        )
+        try:
+            assert_safe_query(query.query_filter, query.query_sort)
+        except WorkloadSpecError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    pack = await engine.diagnose(run_id, query)
     store.save_pack(pack)
     return pack.model_dump(mode="json")
 
@@ -94,7 +136,13 @@ class DecisionRequest(BaseModel):
 
 
 @router.post("/packs/{run_id}/decision", dependencies=[Depends(require_write_token)])
-async def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep, engine: EngineDep):
+async def decide_pack(
+    run_id: str,
+    body: DecisionRequest,
+    store: StoreDep,
+    engine: EngineDep,
+    identity: Annotated[Identity | None, Depends(optional_dbre_identity)],
+):
     """The dashboard's approve/reject endpoint. On approve the recommended index is applied
     and the fix verified (the human-gated mutation); on reject the decision is recorded with
     no mutation. Returns the updated pack; 404 not_found / 409 already_decided |
@@ -119,12 +167,15 @@ async def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep, engin
             status_code=409,
             content={"error": "approval_gate", "detail": "pending approval gate required"},
         )
+    # Authoritative approver: the verified DBRE session when configured, else the request body
+    # (local/CI). The dashboard never decides who approved.
+    approver = identity.display_name if identity is not None else body.approver
     if body.decision == "approve":
         try:
             ticket = issue_approval_ticket(
                 pack,
                 evidence_hash=body.evidence_hash,
-                approver=body.approver,
+                approver=approver,
                 note=body.note,
             )
         except ValueError as exc:
@@ -134,7 +185,7 @@ async def decide_pack(run_id: str, body: DecisionRequest, store: StoreDep, engin
         updated = await engine.apply_and_verify(pack, ticket)
     else:
         try:
-            updated = engine.reject(pack, approver=body.approver, note=body.note)
+            updated = engine.reject(pack, approver=approver, note=body.note)
         except ValueError as exc:
             return JSONResponse(
                 status_code=409, content={"error": "approval_gate", "detail": str(exc)}

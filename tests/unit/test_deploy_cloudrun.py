@@ -72,3 +72,19 @@ def test_cloudrun_deploy_fails_when_split_agent_resources_are_duplicate():
 
     assert result.returncode == 1
     assert "three distinct deployed agents" in result.stdout
+
+
+def test_cloudrun_deploy_fails_when_session_secret_missing():
+    result = _run_script(
+        {
+            "RUN_API_TOKEN": "test-token",
+            "SESSION_SECRET": "",
+            "AGENT_ENGINE_DIAGNOSE_RESOURCE": "projects/p/locations/us-central1/reasoningEngines/d",
+            "AGENT_ENGINE_CANDIDATE_RESOURCE": "projects/p/locations/us-central1/reasoningEngines/c",
+            "AGENT_ENGINE_RATIONALE_RESOURCE": "projects/p/locations/us-central1/reasoningEngines/r",
+            "MONGO_SECRET_NAME": "mongo-uri",
+        }
+    )
+
+    assert result.returncode == 1
+    assert "SESSION_SECRET is required" in result.stdout

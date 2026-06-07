@@ -10,6 +10,8 @@
 
 import { NextResponse } from "next/server";
 
+import { getSessionToken } from "@/lib/auth";
+
 export const runtime = "nodejs";
 
 function apiBase(): string | null {
@@ -41,10 +43,15 @@ export async function POST(req: Request) {
     );
   }
 
+  const sessionToken = await getSessionToken();
   try {
     const upstream = await fetch(`${base}/packs/${encodeURIComponent(runId)}/decision`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-api-token": token },
+      headers: {
+        "content-type": "application/json",
+        "x-api-token": token,
+        ...(sessionToken ? { authorization: `Bearer ${sessionToken}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
     return new NextResponse(await upstream.text(), {
