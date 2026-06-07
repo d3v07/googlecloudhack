@@ -151,6 +151,14 @@
   background: var(--bg-elevated);
 }
 
+/* Simulation: a locally-generated demo run — distinct from live and fallback so
+   the operator can never mistake it for a real run. */
+.source[data-source="simulation"] {
+  color: var(--amber);
+  background: var(--amber-dim);
+  border: 1px solid var(--amber);
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1.4fr 1fr;

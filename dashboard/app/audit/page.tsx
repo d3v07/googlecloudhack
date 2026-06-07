@@ -57,7 +57,8 @@ export default async function AuditPage({
             <span className={styles.ok}>
               <CheckCircle /> Decision recorded
             </span>
-            <Field k="approver" v={String(decision.approved_by ?? "—")} />
+            {/* approver is carried on the approval gate; the decision record often omits it */}
+            <Field k="approver" v={String(gate?.approver ?? decision.approved_by ?? "—")} />
             <Field k="approved at" v={String(decision.approved_at ?? "—")} />
             <Field k="bound hash" v={shortHash(decision.evidence_hash)} mono />
           </div>

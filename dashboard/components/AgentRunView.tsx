@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   MagnifyingGlass,
   GitBranch,
   WifiHigh,
   WifiSlash,
+  Flask,
   Sparkle,
   CircleNotch,
 } from "@phosphor-icons/react/dist/ssr";
@@ -23,9 +25,10 @@ import styles from "@/app/run-review.module.css";
 
 /**
  * The interactive run view (#37). Seeded with the server-loaded pack; the "Ask
- * the agent" button triggers a live diagnosis (POST /api/run) and swaps the
- * rendered pack for the freshly-produced one. The 5-stage
- * indicator shows a running state while the agent works.
+ * the agent" button triggers a diagnosis (POST /api/run) and navigates to
+ * /runs/<run_id> for the freshly-produced run, so the destination's loader
+ * supplies the durable source (live vs simulation) — we never assert "live" on
+ * the client. The 5-stage indicator shows a running state while it works.
  */
 export function AgentRunView({
   initialPack,
@@ -36,9 +39,13 @@ export function AgentRunView({
   initialSource: PackSource;
   initialNotice?: string;
 }) {
+  const router = useRouter();
   const [pack, setPack] = useState<EvidencePack>(initialPack);
-  const [source, setSource] = useState<PackSource>(initialSource);
-  const [notice, setNotice] = useState<string | undefined>(initialNotice);
+  // source/notice are fixed for this rendered run: "Ask" navigates to a fresh
+  // run rather than mutating in place, and approving a pack never changes its
+  // source. setPack still drives in-place approval updates from the gate panel.
+  const source = initialSource;
+  const notice = initialNotice;
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ds = displayStatus(pack);
@@ -48,14 +55,14 @@ export function AgentRunView({
     setRunning(true);
     setError(null);
     const res = await askTheAgent();
-    setRunning(false);
     if (res.ok && res.pack) {
-      setPack(res.pack);
-      setSource("live");
-      setNotice(undefined);
-    } else {
-      setError(res.message ?? "Could not run the agent.");
+      // Navigate to the produced run; loadPack on that page resolves the honest
+      // source (live from the read API, or simulation when no backend is set).
+      router.push(`/runs/${encodeURIComponent(res.pack.run_id)}`);
+      return;
     }
+    setRunning(false);
+    setError(res.message ?? "Could not run the agent.");
   }
 
   return (
@@ -72,8 +79,14 @@ export function AgentRunView({
           <code>{pack.namespace}</code>
           <StatusPill status={ds.key} label={ds.label} />
           <span className={styles.source} data-source={source} title={notice ?? "Live read API"}>
-            {source === "live" ? <WifiHigh size={13} /> : <WifiSlash size={13} />}
-            {source}
+            {source === "live" ? (
+              <WifiHigh size={13} />
+            ) : source === "simulation" ? (
+              <Flask size={13} weight="fill" />
+            ) : (
+              <WifiSlash size={13} />
+            )}
+            {source === "simulation" ? "simulation" : source}
           </span>
         </div>
       </header>
@@ -87,12 +100,12 @@ export function AgentRunView({
           ) : (
             <Sparkle weight="fill" size={18} />
           )}
-          {running ? "Agent diagnosing…" : "Ask the agent to diagnose"}
+          {running ? "Diagnosis running…" : "Ask the agent to diagnose"}
         </button>
         <span className={styles.askHint}>
           {running
-            ? "Running the live Agent Engine diagnosis over the Denver/ESR fixture…"
-            : "Triggers a diagnosis run and renders the resulting evidence pack."}
+            ? "Diagnosis running over the Denver/ESR query…"
+            : "Triggers a diagnosis run and opens the resulting evidence pack."}
         </span>
         {error && <span className={styles.askError}>{error}</span>}
       </div>
