@@ -37,18 +37,39 @@ LIMIT = 20
 NAMESPACE = "sample_supplies.sales_agent_demo"
 RUN_ID = "test-run-1"
 CREATED_AT = "2026-06-01T00:00:00Z"
+WRONG_INDEX = {"storeLocation": 1, "customer.age": 1, "saleDate": -1}
+RIGHT_INDEX = {"storeLocation": 1, "saleDate": -1, "customer.age": 1}
 
 
-def _make_evidence(has_blocking_sort: bool, keys_examined: int = 1000) -> Evidence:
+def _make_evidence(
+    has_blocking_sort: bool,
+    keys_examined: int | None = None,
+    *,
+    selected_index: bool = True,
+    docs_examined: int = 20,
+    millis: float | None = None,
+) -> Evidence:
+    keys = keys_examined if keys_examined is not None else (17000 if has_blocking_sort else 64)
+    elapsed = millis if millis is not None else (41.0 if has_blocking_sort else 2.0)
     stages = ("FETCH", "SORT", "IXSCAN") if has_blocking_sort else ("FETCH", "IXSCAN")
+    ixscan = {
+        "stage": "IXSCAN",
+        "keyPattern": RIGHT_INDEX if selected_index and not has_blocking_sort else WRONG_INDEX,
+        "indexName": "esr_right_C" if selected_index and not has_blocking_sort else "esr_wrong_B",
+    }
+    explain_plan = (
+        {"stage": "FETCH", "inputStage": {"stage": "SORT", "inputStage": ixscan}}
+        if has_blocking_sort
+        else {"stage": "FETCH", "inputStage": ixscan}
+    )
     return Evidence(
         query={"filter": QUERY_FILTER, "sort": QUERY_SORT, "limit": LIMIT},
-        explain_plan={"stage": "FETCH"},
+        explain_plan=explain_plan,
         metrics=EvidenceMetrics(
-            docs_examined=20,
+            docs_examined=docs_examined,
             docs_returned=20,
-            millis=10.0,
-            total_keys_examined=keys_examined,
+            millis=elapsed,
+            total_keys_examined=keys,
             stages=stages,
         ),
     )
@@ -339,12 +360,13 @@ def test_agent_led_diagnosis_writes_agent_sourced_ledger_records():
 # --- apply_and_verify (post-approval mutation) ---
 
 
-def test_apply_and_verify_is_verified_when_sort_gone():
+def test_apply_and_verify_is_verified_when_strict_checks_pass():
     backend = FakeBackend([_make_evidence(True, 17000), _make_evidence(False, 20)])
     verified = _apply(backend, _diagnose(backend))
     assert verified.status is PackStatus.VERIFIED
     assert verified.after is not None
     assert verified.after.metrics.has_blocking_sort is False
+    assert "recommended index evidenced" in verified.agent_trace[-1].summary
 
 
 def test_apply_and_verify_is_approved_when_sort_remains():
@@ -352,6 +374,31 @@ def test_apply_and_verify_is_approved_when_sort_remains():
     result = _apply(backend, _diagnose(backend))
     assert result.status is PackStatus.APPROVED
     assert result.after is not None
+    assert "blocking SORT remains" in result.agent_trace[-1].summary
+
+
+def test_apply_and_verify_requires_selected_index_evidence():
+    backend = FakeBackend(
+        [
+            _make_evidence(True, 17000),
+            _make_evidence(False, 20, selected_index=False),
+        ]
+    )
+    result = _apply(backend, _diagnose(backend))
+    assert result.status is PackStatus.APPROVED
+    assert "recommended index not evidenced" in result.agent_trace[-1].summary
+
+
+def test_apply_and_verify_requires_metric_improvement():
+    backend = FakeBackend(
+        [
+            _make_evidence(True, 100, millis=2.0),
+            _make_evidence(False, 100, docs_examined=20, millis=2.0),
+        ]
+    )
+    result = _apply(backend, _diagnose(backend))
+    assert result.status is PackStatus.APPROVED
+    assert "no keys/docs/millis metric improved" in result.agent_trace[-1].summary
 
 
 def test_apply_and_verify_applies_the_recommended_index():

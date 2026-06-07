@@ -32,13 +32,25 @@ LIMIT = 20
 NAMESPACE = "sample_supplies.sales_agent_demo"
 RUN_ID = "ledger-test"
 CREATED_AT = "2026-06-01T00:00:00Z"
+WRONG_INDEX = {"storeLocation": 1, "customer.age": 1, "saleDate": -1}
+RIGHT_INDEX = {"storeLocation": 1, "saleDate": -1, "customer.age": 1}
 
 
 def _evidence(has_blocking_sort: bool, keys_examined: int) -> Evidence:
     stages = ("FETCH", "SORT", "IXSCAN") if has_blocking_sort else ("FETCH", "IXSCAN")
+    ixscan = {
+        "stage": "IXSCAN",
+        "keyPattern": WRONG_INDEX if has_blocking_sort else RIGHT_INDEX,
+        "indexName": "esr_wrong_B" if has_blocking_sort else "esr_right_C",
+    }
+    explain_plan = (
+        {"stage": "FETCH", "inputStage": {"stage": "SORT", "inputStage": ixscan}}
+        if has_blocking_sort
+        else {"stage": "FETCH", "inputStage": ixscan}
+    )
     return Evidence(
         query={"filter": QUERY_FILTER, "sort": QUERY_SORT, "limit": LIMIT},
-        explain_plan={"stage": "FETCH"},
+        explain_plan=explain_plan,
         metrics=EvidenceMetrics(
             docs_examined=20,
             docs_returned=20,

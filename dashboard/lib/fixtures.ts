@@ -133,6 +133,17 @@ export const FIXTURE_PENDING: EvidencePack = {
   run_id: "fixture-pending",
 };
 
+/**
+ * Local simulation pack (run_id prefix "sim-"). Served by /api/run and resolved
+ * by loadPack ONLY when no backend is configured, so the demo still shows a
+ * full DIAGNOSED evidence pack. Labeled "simulation" (never "live") everywhere
+ * it surfaces; it is read-only and never applies anything.
+ */
+export const FIXTURE_SIMULATION: EvidencePack = {
+  ...BASE,
+  run_id: "sim-001",
+};
+
 /** status approved, after null — applied, verification pending (defensive). */
 export const FIXTURE_APPLYING: EvidencePack = {
   ...BASE,
@@ -192,11 +203,12 @@ export const FIXTURE_VERIFIED: EvidencePack = {
   }),
 };
 
-/** All five visual-state fixtures, in pipeline order. */
+/** All visual-state fixtures, in pipeline order (simulation pack last). */
 export const FIXTURES: EvidencePack[] = [
   FIXTURE_PENDING,
   FIXTURE_APPLYING,
   FIXTURE_VERIFICATION_FAILED,
   FIXTURE_REJECTED,
   FIXTURE_VERIFIED,
+  FIXTURE_SIMULATION,
 ];

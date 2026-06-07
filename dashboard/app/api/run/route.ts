@@ -6,12 +6,19 @@
  * holds the token in server-only env (RUN_API_TOKEN) and forwards to the read API
  * with the X-API-Token header.
  *
+ * When the backend is NOT configured, this route does NOT 503 — it returns a
+ * locally-generated DIAGNOSED EvidencePack (the simulation fixture) with a
+ * `simulated: true` flag, so the demo still works. The token is never involved
+ * on that path. The simulation is read-only: it never applies anything.
+ *
  * Env (server-only — never NEXT_PUBLIC_*):
  *   API_URL          base URL of the read API
  *   RUN_API_TOKEN    shared secret for the gated write endpoints
  */
 
 import { NextResponse } from "next/server";
+
+import { FIXTURE_SIMULATION } from "@/lib/fixtures";
 
 export const runtime = "nodejs";
 
@@ -24,10 +31,10 @@ export async function POST(req: Request) {
   const base = apiBase();
   const token = process.env.RUN_API_TOKEN;
   if (!base || !token) {
-    return NextResponse.json(
-      { error: "no_run_api", message: "Run API not configured (API_URL / RUN_API_TOKEN unset)." },
-      { status: 503 },
-    );
+    // No backend: return a locally-generated DIAGNOSED pack, flagged simulated.
+    // Shape mirrors the configured passthrough (a bare EvidencePack) plus the
+    // sibling `simulated` flag; the token is never touched on this path.
+    return NextResponse.json({ ...FIXTURE_SIMULATION, simulated: true }, { status: 200 });
   }
 
   // Body is optional ({} or {"run_id":"..."}); forward whatever the client sent.

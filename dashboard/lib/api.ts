@@ -14,7 +14,13 @@ import type { EvidencePack } from "./evidence";
 import examplePack from "./example_pack.json";
 import { FIXTURES } from "./fixtures";
 
-export type PackSource = "live" | "fallback";
+/**
+ * Where a rendered pack came from (dashboard-internal — NOT part of EvidencePack
+ * v1): `live` from the read API, `fallback` from a committed visual-state
+ * fixture, `simulation` from a locally-generated demo run when no backend is
+ * configured. `simulation` must never be presented as `live`.
+ */
+export type PackSource = "live" | "fallback" | "simulation";
 
 export interface PackResult {
   pack: EvidencePack;
@@ -105,6 +111,15 @@ export async function loadPack(runId?: string): Promise<PackResult> {
 
   if (!base) {
     const fixture = FIXTURES.find((p) => p.run_id === id);
+    // A resolved "sim-"-prefixed fixture is a locally-generated demo run: label
+    // it "simulation" (never "live"/"fallback") so the operator can't mistake it.
+    if (fixture && fixture.run_id.startsWith("sim-")) {
+      return {
+        pack: fixture,
+        source: "simulation",
+        notice: "Local simulation — generated on the dashboard, not a live run.",
+      };
+    }
     return {
       pack: fixture ?? EXAMPLE,
       source: "fallback",
