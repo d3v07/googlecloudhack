@@ -19,8 +19,9 @@ __pycache__/
 htmlcov/
 coverage.xml
 
-# generated evidence packs (served locally via PACKS_DIR)
-runs/
+# generated evidence packs (served locally via PACKS_DIR) — root-anchored so it
+# does not also ignore dashboard/app/runs/ (the /runs/[run_id] route)
+/runs/
 
 # node
 node_modules/
@@ -37,3 +38,6 @@ mongo-build-plan.md
 .claude/
 .codex/
 .gstack/
+
+# local design reference images (visual specs, not pushed)
+design-refs/

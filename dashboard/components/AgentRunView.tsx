@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Database,
+  MagnifyingGlass,
   GitBranch,
   WifiHigh,
   WifiSlash,
@@ -13,11 +13,13 @@ import { StageIndicator } from "@/components/StageIndicator";
 import { PlanPanel } from "@/components/PlanPanel";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { ApprovalGatePanel } from "@/components/ApprovalGatePanel";
+import { StatusPill } from "@/components/StatusPill";
 import { TracePanel } from "@/components/TracePanel";
 import type { EvidencePack } from "@/lib/evidence";
+import { displayStatus, isVerificationFailed } from "@/lib/evidence";
 import type { PackSource } from "@/lib/api";
 import { askTheAgent } from "@/lib/run";
-import styles from "@/app/page.module.css";
+import styles from "@/app/run-review.module.css";
 
 /**
  * The interactive run view (#37). Seeded with the server-loaded pack; the "Ask
@@ -39,12 +41,8 @@ export function AgentRunView({
   const [notice, setNotice] = useState<string | undefined>(initialNotice);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const statusLabel =
-    pack.status === "diagnosed"
-      ? "pending approval"
-      : pack.status === "verified"
-        ? "verified"
-        : pack.status;
+  const ds = displayStatus(pack);
+  const verificationFailed = isVerificationFailed(pack);
 
   async function onAsk() {
     setRunning(true);
@@ -64,18 +62,15 @@ export function AgentRunView({
     <main className={styles.main}>
       <header className={styles.topbar}>
         <div className={styles.brand}>
-          <Database weight="fill" size={22} className={styles.brandIcon} />
-          <span className={styles.brandName}>DBRE Console</span>
-          <span className={styles.brandTag}>evidence-driven index review</span>
+          <MagnifyingGlass weight="fill" size={20} className={styles.brandIcon} />
+          <h1 className={styles.brandName}>Run Review</h1>
         </div>
         <div className={styles.runMeta}>
           <GitBranch size={14} />
           <code>{pack.run_id}</code>
           <span className={styles.dot}>·</span>
           <code>{pack.namespace}</code>
-          <span className={styles.status} data-status={pack.status}>
-            {statusLabel}
-          </span>
+          <StatusPill status={ds.key} label={ds.label} />
           <span className={styles.source} data-source={source} title={notice ?? "Live read API"}>
             {source === "live" ? <WifiHigh size={13} /> : <WifiSlash size={13} />}
             {source}
@@ -110,7 +105,11 @@ export function AgentRunView({
       />
 
       <div className={styles.grid}>
-        <PlanPanel before={pack.before} after={pack.after} />
+        <PlanPanel
+          before={pack.before}
+          after={pack.after}
+          verificationFailed={verificationFailed}
+        />
         <EvidencePanel finding={pack.finding} recommendation={pack.recommendation} />
       </div>
 

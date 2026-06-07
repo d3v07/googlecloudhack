@@ -12,6 +12,7 @@
 
 import type { EvidencePack } from "./evidence";
 import examplePack from "./example_pack.json";
+import { FIXTURES } from "./fixtures";
 
 export type PackSource = "live" | "fallback";
 
@@ -47,6 +48,53 @@ export function resolveRunId(explicit?: string): string {
   );
 }
 
+export interface PackListResult {
+  packs: EvidencePack[];
+  source: PackSource;
+  notice?: string;
+}
+
+/**
+ * List all packs via the existing GET /packs route (read-only — no new endpoint).
+ * Never throws: on any failure it falls back to the single bundled example so
+ * Overview/History always render something honest.
+ */
+export async function loadPacks(): Promise<PackListResult> {
+  const base = apiBaseUrl();
+  if (!base) {
+    return {
+      packs: FIXTURES,
+      source: "fallback",
+      notice:
+        "No API configured (API_URL unset) — showing local fixtures for every operator state (not live data).",
+    };
+  }
+  try {
+    const res = await fetch(`${base}/packs`, {
+      cache: "no-store",
+      headers: { accept: "application/json" },
+    });
+    if (!res.ok) {
+      return {
+        packs: [EXAMPLE],
+        source: "fallback",
+        notice: `Read API returned ${res.status} — showing the bundled example.`,
+      };
+    }
+    const packs = (await res.json()) as EvidencePack[];
+    if (!Array.isArray(packs) || packs.length === 0) {
+      return { packs: [], source: "live" };
+    }
+    return { packs, source: "live" };
+  } catch {
+    return {
+      packs: [EXAMPLE],
+      source: "fallback",
+      notice: "Read API unreachable — showing the bundled example pack.",
+    };
+  }
+}
+
 /**
  * Load a pack. Never throws — on any failure it returns the example pack with a
  * `fallback` source and a human-readable notice, so the page can always render.
@@ -56,10 +104,13 @@ export async function loadPack(runId?: string): Promise<PackResult> {
   const id = resolveRunId(runId);
 
   if (!base) {
+    const fixture = FIXTURES.find((p) => p.run_id === id);
     return {
-      pack: EXAMPLE,
+      pack: fixture ?? EXAMPLE,
       source: "fallback",
-      notice: "No API configured (API_URL unset) — showing the bundled example pack.",
+      notice: fixture
+        ? `No API configured (API_URL unset) — showing local fixture "${id}" (not live data).`
+        : "No API configured (API_URL unset) — showing the bundled example pack.",
     };
   }
 

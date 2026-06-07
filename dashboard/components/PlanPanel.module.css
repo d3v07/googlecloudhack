@@ -160,3 +160,20 @@
   font-style: italic;
   padding: 18px 4px;
 }
+
+/* explicit explain-plan diff sentence (Layer 1 AC) */
+.diffLabel {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 14px;
+  color: var(--text-dim);
+}
+
+.diffLabel[data-tone="bad"] {
+  color: var(--red);
+}
+
+.diffLabel[data-tone="good"] {
+  color: var(--green);
+}

@@ -23,31 +23,61 @@ function EvidenceColumn({
   title,
   evidence,
   variant,
+  afterState,
 }: {
   title: string;
   evidence: Evidence | null;
   variant: "before" | "after";
+  // only meaningful for the after column when its evidence is absent
+  afterState?: "pending" | "failed";
 }) {
   if (!evidence) {
+    const failed = afterState === "failed";
     return (
       <div className={styles.column} data-variant={variant}>
         <header className={styles.colHead}>
           <span className={styles.colTitle}>{title}</span>
-          <span className={styles.pendingTag}>pending verify</span>
+          <span className={failed ? styles.badBadge : styles.pendingTag}>
+            {failed ? (
+              <>
+                <Warning weight="fill" size={14} /> verification failed
+              </>
+            ) : (
+              "pending verification"
+            )}
+          </span>
         </header>
+        {/* explicit explain-plan diff label for the after side (Layer 1 AC) */}
+        <p className={styles.diffLabel} data-tone={failed ? "bad" : "neutral"}>
+          {failed
+            ? "After: verification failed, see trace"
+            : "After: pending verification"}
+        </p>
         <div className={styles.placeholder}>
-          Observed plan appears here after the fix is applied and re-measured.
+          {failed
+            ? "The apply ran but re-explain did not confirm the fix. Check the trace."
+            : "Observed plan appears here after the fix is applied and re-measured."}
         </div>
       </div>
     );
   }
 
   const m = evidence.metrics;
+  const sorted = m.has_blocking_sort === true;
+  // The explicit explain-plan diff sentence (Layer 1 AC).
+  const diffLine =
+    variant === "before"
+      ? sorted
+        ? "Before: SORT present / high docs examined"
+        : "Before: index-backed query"
+      : sorted
+        ? "After: SORT still present, see trace"
+        : "After: SORT removed / index-backed query";
   return (
     <div className={styles.column} data-variant={variant}>
       <header className={styles.colHead}>
         <span className={styles.colTitle}>{title}</span>
-        {m.has_blocking_sort === true ? (
+        {sorted ? (
           <span className={styles.badBadge}>
             <Warning weight="fill" size={14} /> blocking sort
           </span>
@@ -57,6 +87,10 @@ function EvidenceColumn({
           </span>
         )}
       </header>
+
+      <p className={styles.diffLabel} data-tone={sorted ? "bad" : "good"}>
+        {diffLine}
+      </p>
 
       <div className={styles.stageChain}>
         {m.stages.map((s, i) => (
@@ -84,16 +118,23 @@ function EvidenceColumn({
 export function PlanPanel({
   before,
   after,
+  verificationFailed = false,
 }: {
   before: Evidence;
   after: Evidence | null;
+  verificationFailed?: boolean;
 }) {
   return (
     <section className={styles.panel}>
-      <h2 className={styles.heading}>Predicted vs Observed</h2>
+      <h2 className={styles.heading}>Before / After explain-plan diff</h2>
       <div className={styles.grid}>
         <EvidenceColumn title="Before — serving index" evidence={before} variant="before" />
-        <EvidenceColumn title="After — recommended index" evidence={after} variant="after" />
+        <EvidenceColumn
+          title="After — recommended index"
+          evidence={after}
+          variant="after"
+          afterState={verificationFailed ? "failed" : "pending"}
+        />
       </div>
     </section>
   );

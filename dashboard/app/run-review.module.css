@@ -92,6 +92,7 @@
 }
 
 .brandName {
+  margin: 0;
   font-family: var(--mono);
   font-size: 18px;
   font-weight: 700;
@@ -125,27 +126,6 @@
 
 .dot {
   color: var(--text-faint);
-}
-
-.status {
-  font-family: var(--mono);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 2px 9px;
-  border-radius: 99px;
-  color: var(--amber);
-  background: var(--amber-dim);
-}
-
-.status[data-status="verified"] {
-  color: var(--green);
-  background: var(--green-dim);
-}
-
-.status[data-status="rejected"] {
-  color: var(--red);
-  background: var(--red-dim);
 }
 
 .source {

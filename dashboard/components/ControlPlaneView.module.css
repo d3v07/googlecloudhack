@@ -1,0 +1,197 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 12px;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.heading {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.det {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--green);
+}
+
+.note {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.honest {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 860px) {
+  .cardGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cardIcon {
+  color: var(--green);
+}
+
+.cardName {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.cardDesc {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.respList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.respList li {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding-left: 13px;
+  position: relative;
+  line-height: 1.45;
+}
+
+.respList li::before {
+  content: "·";
+  position: absolute;
+  left: 2px;
+  color: var(--green);
+}
+
+.subHeading {
+  font-family: var(--mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-top: 8px;
+}
+
+.states {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.stateNode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stateName {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-faint);
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.stateNode[data-done="true"] .stateName {
+  color: var(--green);
+  border-color: var(--green-dim);
+}
+
+.stateNode[data-current="true"] .stateName {
+  color: var(--amber);
+  border-color: var(--amber);
+  background: var(--amber-dim);
+}
+
+.stateArrow {
+  color: var(--text-faint);
+}
+
+.failures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.failure {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 13px;
+}
+
+.failure[data-active="true"] {
+  color: var(--red);
+  border-color: var(--red);
+  background: var(--red-dim);
+}
+
+.failTag {
+  font-style: normal;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--red);
+}

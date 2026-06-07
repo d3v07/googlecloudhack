@@ -1,0 +1,15 @@
+.shell {
+  min-height: 100vh;
+}
+
+/* content sits to the right of the fixed 248px sidebar on desktop */
+.content {
+  margin-left: 248px;
+  min-height: 100vh;
+}
+
+@media (max-width: 860px) {
+  .content {
+    margin-left: 0;
+  }
+}
