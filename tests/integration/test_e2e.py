@@ -33,6 +33,9 @@ def test_live_two_phase_diagnose_then_approve_verify():
 
     client = MongoClient(conn)
     seeded_indexes = set(client[DB][COLL].index_information().keys())
+    if "esr_wrong_B" not in seeded_indexes or "esr_right_C" not in seeded_indexes:
+        client.close()
+        pytest.skip("legacy B/C fixture not seeded (workload baseline active)")
 
     backend = PymongoBackend(conn, DB, COLL)
     try:

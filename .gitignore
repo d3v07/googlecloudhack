@@ -40,6 +40,8 @@ mongo-build-plan.md
 .claude/
 .codex/
 .gstack/
+.agents/
+skills-lock.json
 
 # local design reference images (visual specs, not pushed)
 design-refs/

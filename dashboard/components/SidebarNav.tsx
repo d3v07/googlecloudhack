@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Database,
   SquaresFour,
@@ -10,12 +10,17 @@ import {
   TreeStructure,
   ClockCounterClockwise,
   ShieldCheck,
+  Gauge,
+  Terminal,
+  SignOut,
   List,
   X,
 } from "@phosphor-icons/react/dist/ssr";
+import type { Session } from "@/lib/session";
 import styles from "./SidebarNav.module.css";
 
-const NAV = [
+const DBRE_NAV = [
+  { href: "/dbre", label: "Slow-Query Queue", icon: Gauge },
   { href: "/", label: "Overview", icon: SquaresFour },
   { href: "/run-review", label: "Run Review", icon: MagnifyingGlass },
   { href: "/system-map", label: "System Map", icon: TreeStructure },
@@ -23,17 +28,23 @@ const NAV = [
   { href: "/audit", label: "Audit & Compliance", icon: ShieldCheck },
 ] as const;
 
-export function SidebarNav() {
+const USER_NAV = [{ href: "/console", label: "Workload Console", icon: Terminal }] as const;
+
+export function SidebarNav({ session }: { session: Session }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const wasOpen = useRef(false);
 
+  const nav = session.role === "dbre" ? DBRE_NAV : USER_NAV;
+
   function isActive(href: string): boolean {
     if (href === "/") return pathname === "/";
     // /runs/<id> is the canonical run view; keep "Run Review" active there too.
-    if (href === "/run-review") return pathname.startsWith("/run-review") || pathname.startsWith("/runs");
+    if (href === "/run-review")
+      return pathname.startsWith("/run-review") || pathname.startsWith("/runs");
     return pathname.startsWith(href);
   }
 
@@ -57,6 +68,15 @@ export function SidebarNav() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  async function logout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  }
 
   return (
     <>
@@ -83,12 +103,14 @@ export function SidebarNav() {
           <Database weight="fill" size={22} className={styles.brandIcon} />
           <div className={styles.brandText}>
             <span className={styles.brandName}>DBRE Console</span>
-            <span className={styles.brandTag}>operator control plane</span>
+            <span className={styles.brandTag}>
+              {session.role === "dbre" ? "operator control plane" : "workload console"}
+            </span>
           </div>
         </div>
 
         <nav className={styles.nav}>
-          {NAV.map(({ href, label, icon: Icon }, i) => (
+          {nav.map(({ href, label, icon: Icon }, i) => (
             <Link
               key={href}
               ref={i === 0 ? firstLinkRef : undefined}
@@ -103,6 +125,19 @@ export function SidebarNav() {
             </Link>
           ))}
         </nav>
+
+        <div className={styles.identity}>
+          <div className={styles.identityText}>
+            <span className={styles.identityName}>{session.displayName}</span>
+            <span className={styles.roleBadge} data-role={session.role}>
+              {session.role === "dbre" ? "DBRE" : "user"}
+            </span>
+          </div>
+          <button className={styles.logout} onClick={logout} aria-label="Sign out">
+            <SignOut size={16} />
+            Sign out
+          </button>
+        </div>
 
         <div className={styles.footer}>
           <span className={styles.footerLine}>Evidence-Driven DBRE Agent</span>

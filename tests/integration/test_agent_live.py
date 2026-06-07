@@ -21,6 +21,14 @@ def test_scripted_run_diagnoses_from_real_mcp_explain():
     # BOTH indexes, so the unhinted optimizer already picks C → the live plan is
     # optimal (severity "low"); the blocking-sort trap delta is proven by the
     # deterministic E2E (test_e2e.py, via pymongo hints) and the #9 golden.
+    from pymongo import MongoClient
+
+    from controller.demo_fixture import COLL, DB
+
+    names = set(MongoClient(get_connection_string())[DB][COLL].index_information().keys())
+    if "esr_wrong_B" not in names or "esr_right_C" not in names:
+        pytest.skip("legacy B/C fixture not seeded (workload baseline active)")
+
     from agents.run import run_live
 
     diagnosis = run_live()

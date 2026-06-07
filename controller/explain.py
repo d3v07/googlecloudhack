@@ -68,10 +68,13 @@ def capture_evidence(
     query_sort: Sequence[tuple[str, int]],
     limit: int,
     hint: Any | None = None,
+    max_time_ms: int | None = None,
 ) -> Evidence:
     cursor = collection.find(dict(query_filter), sort=list(query_sort), limit=limit)
     if hint is not None:
         cursor = cursor.hint(hint)
+    if max_time_ms is not None:
+        cursor = cursor.max_time_ms(max_time_ms)
     explained = cursor.explain()
 
     winning = explained["queryPlanner"]["winningPlan"]

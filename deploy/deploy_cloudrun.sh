@@ -38,6 +38,14 @@ MONGO_SECRET_NAME="${MONGO_SECRET_NAME:-}"
 # Shared secret gating the write endpoints (POST /run, /decision). Reads stay public.
 # Required for production deploy: export RUN_API_TOKEN=$(openssl rand -hex 16)
 RUN_API_TOKEN="${RUN_API_TOKEN:-}"
+# Signs/verifies the session token shared with the dashboard (must match the dashboard's value).
+# Required for the two-persona login: export SESSION_SECRET=$(openssl rand -hex 32)
+SESSION_SECRET="${SESSION_SECRET:-}"
+# Secret Manager secret NAMES holding the two shared secrets. The script writes the provided values
+# into these secrets and the service reads them via --set-secrets, so the values never appear in the
+# Cloud Run env-var config as plaintext.
+RUN_TOKEN_SECRET="${RUN_TOKEN_SECRET:-gcrah-run-token}"
+SESSION_TOKEN_SECRET="${SESSION_TOKEN_SECRET:-gcrah-session-secret}"
 AGENT_ENGINE_DIAGNOSE_RESOURCE="${AGENT_ENGINE_DIAGNOSE_RESOURCE:-}"
 AGENT_ENGINE_CANDIDATE_RESOURCE="${AGENT_ENGINE_CANDIDATE_RESOURCE:-}"
 AGENT_ENGINE_RATIONALE_RESOURCE="${AGENT_ENGINE_RATIONALE_RESOURCE:-}"
@@ -62,12 +70,29 @@ if [ -z "${MONGO_SECRET_NAME}" ]; then
   echo "Set it with: export MONGO_SECRET_NAME=mongodb-connection-string"
   exit 1
 fi
+if [ -z "${SESSION_SECRET}" ]; then
+  echo "ERROR: SESSION_SECRET is required so the read API can verify dashboard session tokens."
+  echo "Set it with: export SESSION_SECRET=\$(openssl rand -hex 32)  (same value as the dashboard)"
+  exit 1
+fi
+
+upsert_secret() {  # $1 = secret name, $2 = value
+  gcloud secrets describe "$1" --project="${GCP_PROJECT}" >/dev/null 2>&1 \
+    || gcloud secrets create "$1" --replication-policy=automatic --project="${GCP_PROJECT}"
+  printf '%s' "$2" | gcloud secrets versions add "$1" --data-file=- --project="${GCP_PROJECT}"
+}
+
+echo "==> Storing write secrets in Secret Manager (kept out of the Cloud Run env-var config)"
+upsert_secret "${RUN_TOKEN_SECRET}" "${RUN_API_TOKEN}"
+upsert_secret "${SESSION_TOKEN_SECRET}" "${SESSION_SECRET}"
 
 echo "==> Granting Secret Manager accessor role to ${SERVICE_ACCOUNT}"
-gcloud secrets add-iam-policy-binding "${MONGO_SECRET_NAME}" \
-  --project="${GCP_PROJECT}" \
-  --role="roles/secretmanager.secretAccessor" \
-  --member="serviceAccount:${SERVICE_ACCOUNT}"
+for secret in "${MONGO_SECRET_NAME}" "${RUN_TOKEN_SECRET}" "${SESSION_TOKEN_SECRET}"; do
+  gcloud secrets add-iam-policy-binding "${secret}" \
+    --project="${GCP_PROJECT}" \
+    --role="roles/secretmanager.secretAccessor" \
+    --member="serviceAccount:${SERVICE_ACCOUNT}"
+done
 
 echo "==> Deploying ${SERVICE_NAME} to Cloud Run (${REGION})"
 # --source . uses the Dockerfile at the repo root via Cloud Build.
@@ -79,7 +104,8 @@ gcloud run deploy "${SERVICE_NAME}" \
   --project "${GCP_PROJECT}" \
   --allow-unauthenticated \
   --service-account "${SERVICE_ACCOUNT}" \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME},RUN_API_TOKEN=${RUN_API_TOKEN},AGENT_ENGINE_DIAGNOSE_RESOURCE=${AGENT_ENGINE_DIAGNOSE_RESOURCE},AGENT_ENGINE_CANDIDATE_RESOURCE=${AGENT_ENGINE_CANDIDATE_RESOURCE},AGENT_ENGINE_RATIONALE_RESOURCE=${AGENT_ENGINE_RATIONALE_RESOURCE}" \
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=${GCP_PROJECT},MONGO_SECRET_NAME=${MONGO_SECRET_NAME},AGENT_ENGINE_DIAGNOSE_RESOURCE=${AGENT_ENGINE_DIAGNOSE_RESOURCE},AGENT_ENGINE_CANDIDATE_RESOURCE=${AGENT_ENGINE_CANDIDATE_RESOURCE},AGENT_ENGINE_RATIONALE_RESOURCE=${AGENT_ENGINE_RATIONALE_RESOURCE}" \
+  --set-secrets "RUN_API_TOKEN=${RUN_TOKEN_SECRET}:latest,SESSION_SECRET=${SESSION_TOKEN_SECRET}:latest" \
   --port 8080 \
   --min-instances 0 \
   --max-instances 3 \

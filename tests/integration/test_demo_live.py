@@ -19,7 +19,16 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_live_demo_catches_the_trap_and_awaits_approval():
-    pack = asyncio.run(run_demo(get_connection_string(), run_id="demo-live"))
+    from pymongo import MongoClient
+
+    from controller.demo_fixture import COLL, DB
+
+    conn = get_connection_string()
+    names = set(MongoClient(conn)[DB][COLL].index_information().keys())
+    if "esr_wrong_B" not in names or "esr_right_C" not in names:
+        pytest.skip("legacy B/C fixture not seeded (workload baseline active)")
+
+    pack = asyncio.run(run_demo(conn, run_id="demo-live"))
 
     assert pack.finding.severity is Severity.HIGH
     assert pack.status is PackStatus.DIAGNOSED  # diagnose-only — no auto-fix

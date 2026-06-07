@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from api.agent_engine import AgentDiagnosisParseError, AgentEngineConfigError
 from api.server import LocalFilePackStore, MongoPackStore, _EmptyPackStore, _LiveEngine, create_app
+from controller.auth import Identity, make_session_token
 from controller.backends import FakeBackend
 from controller.orchestrator import AgentDiagnosisResult
 from controller.pack import pack_evidence_hash
@@ -105,9 +106,11 @@ class FakeEngine:
         self.diagnosed: list[str] = []
         self.applied: list[str] = []
         self.rejected: list[str] = []
+        self.queries: list = []
 
-    async def diagnose(self, run_id: str) -> EvidencePack:
+    async def diagnose(self, run_id: str, query=None) -> EvidencePack:
         self.diagnosed.append(run_id)
+        self.queries.append(query)
         return _minimal_pack(run_id, PackStatus.DIAGNOSED)
 
     async def apply_and_verify(self, pack: EvidencePack, ticket) -> EvidencePack:
@@ -643,9 +646,19 @@ def test_create_app_live_mongo_mode_requires_write_token(monkeypatch) -> None:
         create_app()
 
 
+def test_create_app_live_mongo_mode_requires_session_secret(monkeypatch) -> None:
+    monkeypatch.setenv("MONGO_SECRET_NAME", "mongo-uri")
+    monkeypatch.setenv("RUN_API_TOKEN", "token")
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+
+    with pytest.raises(RuntimeError, match="SESSION_SECRET"):
+        create_app()
+
+
 def test_create_app_live_mongo_mode_requires_split_agent_resources(monkeypatch) -> None:
     monkeypatch.setenv("MONGO_SECRET_NAME", "mongo-uri")
     monkeypatch.setenv("RUN_API_TOKEN", "token")
+    monkeypatch.setenv("SESSION_SECRET", "x")
     monkeypatch.delenv("AGENT_ENGINE_RESOURCE", raising=False)
     monkeypatch.delenv("AGENT_ENGINE_DIAGNOSE_RESOURCE", raising=False)
     monkeypatch.delenv("AGENT_ENGINE_CANDIDATE_RESOURCE", raising=False)
@@ -690,3 +703,185 @@ def test_reads_never_require_token(monkeypatch) -> None:
     assert client.get("/health").status_code == 200
     assert client.get("/packs").status_code == 200
     assert client.get("/packs/run-001").status_code == 200
+
+
+# --- captured-query diagnosis + DBRE role enforcement (two-persona flow) ---
+
+
+class FakeWorkloadService:
+    def __init__(self, captured: dict | None = None) -> None:
+        self._captured = captured or {}
+
+    def run_query(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def list_slow_queries(self) -> list[dict]:
+        return []
+
+    def get_captured(self, captured_id: str) -> dict | None:
+        return self._captured.get(captured_id)
+
+
+class TicketRecordingEngine(FakeEngine):
+    def __init__(self) -> None:
+        super().__init__()
+        self.tickets: list = []
+
+    async def apply_and_verify(self, pack: EvidencePack, ticket) -> EvidencePack:
+        self.tickets.append(ticket)
+        return _minimal_pack(pack.run_id, PackStatus.VERIFIED)
+
+
+_CAPTURED = {
+    "cap-1": {
+        "query": {"filter": {"storeLocation": "Denver"}, "sort": [["saleDate", -1]], "limit": 20}
+    }
+}
+
+
+def test_run_with_captured_query_feeds_query_into_engine() -> None:
+    engine = FakeEngine()
+    client = TestClient(
+        create_app(FakePackStore([]), engine, workload_service=FakeWorkloadService(_CAPTURED))
+    )
+    resp = client.post("/run", json={"captured_query_id": "cap-1"})
+    assert resp.status_code == 200
+    query = engine.queries[0]
+    assert query is not None
+    assert query.query_filter == {"storeLocation": "Denver"}
+    assert query.query_sort == [("saleDate", -1)]
+    assert query.limit == 20
+
+
+def test_run_unknown_captured_query_returns_404() -> None:
+    client = TestClient(
+        create_app(FakePackStore([]), FakeEngine(), workload_service=FakeWorkloadService({}))
+    )
+    assert client.post("/run", json={"captured_query_id": "missing"}).status_code == 404
+
+
+def test_run_captured_query_requires_workload_service() -> None:
+    client = TestClient(create_app(FakePackStore([]), FakeEngine()))
+    assert client.post("/run", json={"captured_query_id": "cap-1"}).status_code == 503
+
+
+def test_run_rejects_unsafe_captured_filter() -> None:
+    captured = {"evil": {"query": {"filter": {"$where": "true"}, "sort": [], "limit": 20}}}
+    client = TestClient(
+        create_app(FakePackStore([]), FakeEngine(), workload_service=FakeWorkloadService(captured))
+    )
+    assert client.post("/run", json={"captured_query_id": "evil"}).status_code == 422
+
+
+def test_run_fixture_path_passes_no_query() -> None:
+    engine = FakeEngine()
+    client = TestClient(create_app(FakePackStore([]), engine))
+    assert client.post("/run", json={}).status_code == 200
+    assert engine.queries == [None]
+
+
+def test_run_enforces_dbre_when_session_configured(monkeypatch) -> None:
+    monkeypatch.setenv("SESSION_SECRET", "rt-secret")
+    client = TestClient(create_app(FakePackStore([]), FakeEngine()))
+    assert client.post("/run", json={}).status_code == 401
+    user = make_session_token(Identity("dev", "Dev", "user"), "rt-secret")
+    assert (
+        client.post("/run", json={}, headers={"Authorization": f"Bearer {user}"}).status_code == 403
+    )
+    dbre = make_session_token(Identity("dbre", "DBRE", "dbre"), "rt-secret")
+    assert (
+        client.post("/run", json={}, headers={"Authorization": f"Bearer {dbre}"}).status_code == 200
+    )
+
+
+def test_decision_approver_comes_from_session(monkeypatch) -> None:
+    monkeypatch.setenv("SESSION_SECRET", "rt-secret")
+    pack = _minimal_pack("run-sess")
+    engine = TicketRecordingEngine()
+    client = TestClient(create_app(FakePackStore([pack]), engine))
+    dbre = make_session_token(Identity("dbre", "DBRE Operator", "dbre"), "rt-secret")
+    resp = client.post(
+        "/packs/run-sess/decision",
+        json={"decision": "approve", "evidence_hash": pack.evidence_hash, "approver": "spoofed"},
+        headers={"Authorization": f"Bearer {dbre}"},
+    )
+    assert resp.status_code == 200
+    assert engine.tickets[0].approver == "DBRE Operator"
+
+
+def test_live_engine_apply_and_verify_thaws_frozen_query() -> None:
+    """Regression: apply+verify must hand pymongo a PLAIN dict filter. pack.before.query is frozen
+    (mappingproxy on nested range conditions), which pymongo cannot deep-copy — a defect only
+    reachable through _LiveEngine, since the orchestrator tests pass a plain filter directly."""
+    import asyncio
+    from types import MappingProxyType
+
+    from controller.orchestrator import issue_approval_ticket, run_diagnosis
+
+    before_q = {
+        "filter": {"storeLocation": "Denver", "customer.age": {"$gte": 30, "$lte": 50}},
+        "sort": [("saleDate", -1)],
+        "limit": 20,
+    }
+    before = Evidence(
+        query=before_q,
+        explain_plan={"stage": "SORT", "inputStage": {"stage": "IXSCAN", "indexName": "store_eq"}},
+        metrics=EvidenceMetrics(
+            docs_examined=50000,
+            docs_returned=20,
+            millis=10,
+            total_keys_examined=50000,
+            stages=("IXSCAN", "FETCH", "SORT"),
+        ),
+    )
+    after = Evidence(
+        query=before_q,
+        explain_plan={"stage": "IXSCAN", "indexName": "gcrah_rec_x"},
+        metrics=EvidenceMetrics(
+            docs_examined=20,
+            docs_returned=20,
+            millis=1,
+            total_keys_examined=20,
+            stages=("IXSCAN", "FETCH"),
+        ),
+    )
+
+    recorded: list = []
+
+    class RecordingBackend(FakeBackend):
+        async def explain(self, query_filter, query_sort, limit, hint=None):
+            recorded.append(query_filter)
+            return await super().explain(query_filter, query_sort, limit, hint)
+
+    backend = RecordingBackend([before, after])
+
+    class _Engine(_LiveEngine):
+        def _backend(self):
+            return backend
+
+    pack = asyncio.run(
+        run_diagnosis(
+            backend,
+            run_id="thaw",
+            namespace="db.coll",
+            query_filter=before_q["filter"],
+            query_sort=before_q["sort"],
+            limit=20,
+            current_index=None,
+        )
+    )
+    ticket = issue_approval_ticket(pack, evidence_hash=pack.evidence_hash, approver="op")
+    asyncio.run(_Engine("unused").apply_and_verify(pack, ticket))
+
+    def _has_proxy(obj) -> bool:
+        if isinstance(obj, MappingProxyType):
+            return True
+        if isinstance(obj, dict):
+            return any(_has_proxy(v) for v in obj.values())
+        if isinstance(obj, list | tuple):
+            return any(_has_proxy(v) for v in obj)
+        return False
+
+    after_filter = recorded[-1]
+    assert not _has_proxy(after_filter), "apply+verify handed pymongo an unpicklable mappingproxy"
+    assert after_filter == {"storeLocation": "Denver", "customer.age": {"$gte": 30, "$lte": 50}}

@@ -99,7 +99,7 @@ def write_diagnosis_records(
     query_filter: dict[str, Any],
     query_sort: list[tuple[str, int]],
     limit: int,
-    current_index: str,
+    current_index: str | None,
     source: str = "deterministic_esr",
 ) -> None:
     if ledger is None:
