@@ -37,3 +37,6 @@ mongo-build-plan.md
 .claude/
 .codex/
 .gstack/
+
+# local design reference images (visual specs, not pushed)
+design-refs/

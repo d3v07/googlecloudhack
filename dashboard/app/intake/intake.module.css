@@ -1,0 +1,312 @@
+.main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 28px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sub {
+  font-size: 14px;
+  color: var(--text-dim);
+  max-width: 74ch;
+  line-height: 1.6;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sectionHeading {
+  font-family: var(--mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+/* intake sources */
+.sourceGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 860px) {
+  .sourceGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .sourceGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sourceCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.sourceTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.sourceIcon {
+  color: var(--cyan);
+}
+
+.plannedTag {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  background: var(--bg-elevated);
+  padding: 2px 7px;
+  border-radius: 99px;
+}
+
+.sourceName {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.sourceDesc {
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+/* flow row */
+.flowRow {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .flowRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.flowBox {
+  flex: 1;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.flowTitle {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.flowList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.flowList li {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding-left: 14px;
+  position: relative;
+}
+
+.flowList li::before {
+  content: "›";
+  position: absolute;
+  left: 0;
+  color: var(--text-faint);
+}
+
+.flowArrow {
+  color: var(--text-faint);
+  align-self: center;
+  flex-shrink: 0;
+}
+
+@media (max-width: 720px) {
+  .flowArrow {
+    transform: rotate(90deg);
+  }
+}
+
+.routeList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.route {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.method {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.method[data-method="GET"] {
+  color: var(--green);
+  background: var(--green-dim);
+}
+
+.method[data-method="POST"] {
+  color: var(--amber);
+  background: var(--amber-dim);
+}
+
+.routePath {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.routeDesc {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* required wording block */
+.wordingBlock {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--amber-dim);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius);
+}
+
+.wordingIcon {
+  color: var(--amber);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.wording {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.wording code {
+  font-family: var(--mono);
+  color: var(--amber);
+}
+
+/* run state */
+.stateGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stateRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.stateKey {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  min-width: 120px;
+}
+
+.stateVal {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.stateVal[data-tone="amber"] {
+  color: var(--amber);
+}
+.stateVal[data-tone="green"] {
+  color: var(--green);
+}
+.stateVal[data-tone="red"] {
+  color: var(--red);
+}
+
+/* downstream handoff */
+.handoff {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.handoffItem {
+  font-size: 13px;
+  color: var(--text-dim);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+}
+
+.handoffItem code {
+  font-family: var(--mono);
+  color: var(--cyan);
+}
+
+@media (max-width: 640px) {
+  .main {
+    padding: 24px 18px 48px;
+  }
+}

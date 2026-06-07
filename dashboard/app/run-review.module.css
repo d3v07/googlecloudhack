@@ -143,9 +143,20 @@
   background: var(--green-dim);
 }
 
+.status[data-status="approved"] {
+  color: var(--cyan);
+  background: #173a45;
+}
+
 .status[data-status="rejected"] {
   color: var(--red);
   background: var(--red-dim);
+}
+
+.status[data-status="verification-failed"] {
+  color: var(--red);
+  background: var(--red-dim);
+  border: 1px dashed var(--red);
 }
 
 .source {

@@ -133,3 +133,56 @@ export function activeStageIndex(status: PackStatus): number {
 export function formatIndexSpec(spec: IndexKey[]): string {
   return "{ " + spec.map(([f, d]) => `${f}: ${d}`).join(", ") + " }";
 }
+
+/**
+ * Whether a verified/applied pack actually shows a clean (sort-removed) plan, or
+ * the apply ran but verification did not confirm the fix. Used to distinguish the
+ * "verification failed" state from the happy "verified" state in the UI.
+ */
+export function isVerificationFailed(pack: {
+  status: PackStatus;
+  after: Evidence | null;
+}): boolean {
+  if (pack.status !== "verified") return false;
+  // verified should mean the after-plan dropped the blocking sort; if after is
+  // missing or still has a blocking sort, treat it as a failed/incomplete verify.
+  if (!pack.after) return true;
+  return pack.after.metrics.has_blocking_sort === true;
+}
+
+/**
+ * The operator-facing label + a stable key for styling. Keeps status wording
+ * consistent across every page. `verification-failed` is derived, not a raw
+ * backend status.
+ */
+export type DisplayStatus =
+  | "pending-approval"
+  | "approved"
+  | "verified"
+  | "rejected"
+  | "verification-failed";
+
+export function displayStatus(pack: {
+  status: PackStatus;
+  after: Evidence | null;
+}): { key: DisplayStatus; label: string } {
+  if (isVerificationFailed(pack)) {
+    return { key: "verification-failed", label: "verification failed" };
+  }
+  switch (pack.status) {
+    case "diagnosed":
+      return { key: "pending-approval", label: "pending approval" };
+    case "approved":
+      return { key: "approved", label: "approved" };
+    case "verified":
+      return { key: "verified", label: "verified" };
+    case "rejected":
+      return { key: "rejected", label: "rejected" };
+  }
+}
+
+/** Short, copyable preview of a 64-char evidence hash: first8…last6. */
+export function shortHash(hash: string): string {
+  if (hash.length <= 16) return hash;
+  return `${hash.slice(0, 8)}…${hash.slice(-6)}`;
+}

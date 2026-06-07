@@ -10,6 +10,7 @@ import {
   XCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import type { ApprovalGateState, EvidencePack } from "@/lib/evidence";
+import { shortHash } from "@/lib/evidence";
 import { submitDecision, type DecisionKind } from "@/lib/approval";
 import styles from "./ApprovalGatePanel.module.css";
 
@@ -111,7 +112,7 @@ export function ApprovalGatePanel({
 
       <div className={styles.hashBlock}>
         <Fingerprint size={16} />
-        <span>evidence hash</span>
+        <span>full evidence hash</span>
         <code>{approvedHash ?? hash}</code>
       </div>
 
@@ -121,6 +122,12 @@ export function ApprovalGatePanel({
             <Warning weight="fill" size={14} /> {error}
           </span>
         )}
+        {/* short hash preview sits next to the CTA so the operator sees exactly
+            which hash they are signing */}
+        <span className={styles.ctaHash}>
+          <Fingerprint size={13} />
+          {shortHash(approvedHash ?? hash)}
+        </span>
         <button
           className={styles.reject}
           disabled={!pending || busy !== null}
@@ -139,8 +146,30 @@ export function ApprovalGatePanel({
           ) : (
             <ShieldCheck weight="fill" size={18} />
           )}
-          Approve fix
+          Approve this evidence hash
         </button>
+      </div>
+
+      {/* Safety authority — who is allowed to do what (Layer 1 AC, exact lines). */}
+      <div className={styles.safety}>
+        <p className={styles.safetyTitle}>Safety authority</p>
+        <ul className={styles.safetyList}>
+          <li>
+            <span>Agent recommendation</span> read-only
+          </li>
+          <li>
+            <span>Winner selection</span> deterministic Python
+          </li>
+          <li>
+            <span>Approval</span> hash-bound human decision
+          </li>
+          <li>
+            <span>Mutation</span> backend-only after approval
+          </li>
+          <li>
+            <span>Verification</span> re-explain after apply
+          </li>
+        </ul>
       </div>
     </section>
   );

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
+import { SidebarNav } from "@/components/SidebarNav";
+import layout from "./layout.module.css";
 
 // Non-default typography (see globals.css rationale).
 const mono = JetBrains_Mono({
@@ -29,7 +31,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${mono.variable} ${sans.variable}`}>
-      <body>{children}</body>
+      <body>
+        <div className={layout.shell}>
+          <SidebarNav />
+          <div className={layout.content}>{children}</div>
+        </div>
+      </body>
     </html>
   );
 }

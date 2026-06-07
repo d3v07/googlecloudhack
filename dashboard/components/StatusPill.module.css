@@ -1,0 +1,39 @@
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 9px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+/* Five distinct treatments — must not look identical (AC). */
+.pill[data-status="pending-approval"] {
+  color: var(--amber);
+  background: var(--amber-dim);
+}
+
+.pill[data-status="approved"] {
+  color: var(--cyan);
+  background: #173a45;
+}
+
+.pill[data-status="verified"] {
+  color: var(--green);
+  background: var(--green-dim);
+}
+
+.pill[data-status="rejected"] {
+  color: var(--red);
+  background: var(--red-dim);
+}
+
+.pill[data-status="verification-failed"] {
+  color: var(--red);
+  background: var(--red-dim);
+  border: 1px dashed var(--red);
+}
