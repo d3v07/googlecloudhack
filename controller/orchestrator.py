@@ -10,9 +10,10 @@ happens ONLY after an explicit human approval.
 """
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Protocol
+from typing import Any, Protocol
 
 from controller.backends import Backend
 from controller.diagnosis import diagnose
@@ -120,6 +121,74 @@ async def _maybe_narrate(pack: EvidencePack, narrator: Narrator | None) -> Evide
 def _recommended_index_name(recommendation: Recommendation) -> str:
     parts = "_".join(f"{field}{direction}" for field, direction in recommendation.index_spec)
     return f"gcrah_rec_{parts}"[:120]
+
+
+def _key_pattern_matches(
+    key_pattern: Any,
+    index_spec: tuple[tuple[str, int], ...],
+) -> bool:
+    if not isinstance(key_pattern, Mapping):
+        return False
+    try:
+        observed = tuple((str(field), int(direction)) for field, direction in key_pattern.items())
+    except (TypeError, ValueError):
+        return False
+    return observed == tuple((field, int(direction)) for field, direction in index_spec)
+
+
+def _plan_evidences_index(
+    plan: Any,
+    index_spec: tuple[tuple[str, int], ...],
+    index_name: str,
+) -> bool:
+    if isinstance(plan, Mapping):
+        if plan.get("indexName") == index_name:
+            return True
+        if _key_pattern_matches(plan.get("keyPattern"), index_spec):
+            return True
+        return any(_plan_evidences_index(value, index_spec, index_name) for value in plan.values())
+    if isinstance(plan, list | tuple):
+        return any(_plan_evidences_index(value, index_spec, index_name) for value in plan)
+    return False
+
+
+def _metric_improved(before: Evidence, after: Evidence) -> bool:
+    return (
+        after.metrics.total_keys_examined < before.metrics.total_keys_examined
+        or after.metrics.docs_examined < before.metrics.docs_examined
+        or after.metrics.millis < before.metrics.millis
+    )
+
+
+def _verification_checks(
+    before: Evidence,
+    after: Evidence,
+    recommendation: Recommendation,
+    index_name: str,
+) -> dict[str, bool]:
+    return {
+        "sort_removed": not after.metrics.has_blocking_sort,
+        "selected_index_used": _plan_evidences_index(
+            after.explain_plan, recommendation.index_spec, index_name
+        ),
+        "metric_improved": _metric_improved(before, after),
+    }
+
+
+def _verification_summary(checks: dict[str, bool]) -> str:
+    if all(checks.values()):
+        return (
+            "Verified ESR fix: SORT removed, recommended index evidenced, "
+            "and at least one metric improved."
+        )
+    failed: list[str] = []
+    if not checks["sort_removed"]:
+        failed.append("blocking SORT remains")
+    if not checks["selected_index_used"]:
+        failed.append("recommended index not evidenced in winning plan")
+    if not checks["metric_improved"]:
+        failed.append("no keys/docs/millis metric improved")
+    return "Verification failed strict checks: " + "; ".join(failed) + "."
 
 
 def _agent_phase_note(
@@ -260,7 +329,11 @@ def _diagnosis_trace(
     evidence_hash: str,
 ) -> tuple[AgentTraceEvent, ...]:
     trace: list[AgentTraceEvent] = [
-        _gate_trace(run_id, "opened", "Approval gate opened before diagnosis.")
+        _gate_trace(
+            run_id,
+            "opened",
+            "/run created a gated read-only run; mutation requires matching evidence hash approval.",
+        )
     ]
     if result is None:
         trace.append(
@@ -485,9 +558,10 @@ async def apply_and_verify(
     ledger: LedgerStore | None = None,
 ) -> EvidencePack:
     """Post-approval APPLY + VERIFY. Applies the recommended index (the human-approved
-    mutation) and captures after-evidence. VERIFIED if the blocking sort is gone, else
-    APPROVED (applied, didn't help). evidence_hash is unchanged: it bound (before,
-    recommendation) at diagnosis and neither changed, so the approved hash still holds."""
+    mutation) and captures after-evidence. VERIFIED only if strict evidence checks pass:
+    no blocking sort, selected index evidenced, and at least one metric improves. The
+    evidence_hash is unchanged: it bound (before, recommendation) at diagnosis and neither
+    changed, so the approved hash still holds."""
     if pack.status is not PackStatus.DIAGNOSED:
         raise ValueError(f"can only apply+verify a DIAGNOSED pack, got '{pack.status}'")
     _assert_ticket_allows_apply(pack, approval_ticket)
@@ -537,7 +611,8 @@ async def apply_and_verify(
     # under another name (the apply was a conflict-absorbed no-op)
     after = await backend.explain(query_filter, query_sort, limit, hint=index_keys)
 
-    status = PackStatus.VERIFIED if not after.metrics.has_blocking_sort else PackStatus.APPROVED
+    checks = _verification_checks(pack.before, after, pack.recommendation, index_name)
+    status = PackStatus.VERIFIED if all(checks.values()) else PackStatus.APPROVED
     agent_trace.append(
         AgentTraceEvent(
             stage=AgentTraceStage.VERIFY,
@@ -545,9 +620,7 @@ async def apply_and_verify(
             status=AgentTraceStatus.OK
             if status is PackStatus.VERIFIED
             else AgentTraceStatus.FAILED,
-            summary="Verified ESR fix."
-            if status is PackStatus.VERIFIED
-            else "Verification still has a blocking sort.",
+            summary=_verification_summary(checks),
             tool="explain",
             ledger_ref=_ledger_ref(VERIFICATIONS, pack.run_id, "verify:verification"),
         )
