@@ -42,13 +42,13 @@ done and it's waiting at **Approve**.
 > Annotation: "Five visible stages over a phase-gated engine — the agent can't
 > skip ahead or apply early."
 
-### Predicted vs Observed (`03-plan.png`) — the centerpiece
+### Before / After Explain Diff (`03-plan.png`) — the centerpiece
 Two columns, Before (serving index B) and After (recommended index C):
 - **Stage chain** — each plan stage as a chip. `SORT` renders **red**, `IXSCAN`
   **green**, so the eye lands on the blocking sort immediately.
 - **Metrics** — keys examined, docs examined, returned, millis. The
   *keys examined* figure is the headline: **17,209 (B) vs 64 (C)**.
-- A **blocking sort / no sort** badge per column.
+- A **SORT present / SORT removed** badge per column.
 
 > Annotation: "The color *is* the diagnosis — red SORT on the left, gone on the
 > right. 269× fewer index keys for the same 20 rows."

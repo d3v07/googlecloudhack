@@ -15,7 +15,7 @@ three-phase safety engine (DIAGNOSE → APPROVE → VERIFY).
 Current production path:
 
 ```text
-Dashboard -> FastAPI Cloud Run (opens approval gate)
+Dashboard -> FastAPI Cloud Run (creates gated read-only run)
           -> Diagnose Agent Engine -> Candidate Agent Engine -> Rationale Agent Engine
           -> deterministic controller validates + emits DIAGNOSED EvidencePack
           -> /packs/{id}/decision hash-bound approval ticket
@@ -25,9 +25,10 @@ Dashboard -> FastAPI Cloud Run (opens approval gate)
 The three Agent Engine resources perform read-only Mongo diagnosis, candidate testing,
 and rationale generation with Python-native tools.
 Deterministic Python remains the safety authority: it recomputes the ESR winner, evidence
-hash, phase transitions, index apply, and verification. `/run` opens the approval gate
-before diagnosis and remains read-only; `/packs/{run_id}/decision` is the only path that
-can issue the one-time approval ticket required for mutation.
+hash, phase transitions, index apply, and verification. `/run` creates a gated read-only
+run. Mutation remains impossible until the operator approves a matching EvidencePack hash;
+`/packs/{run_id}/decision` is the only path that can issue the one-time internal apply
+action required for mutation.
 
 The dashboard reads only `EvidencePack` JSON, including `approval_gate` state and
 `agent_trace` proof that the gate opened before Agent Engine participation. Internally,

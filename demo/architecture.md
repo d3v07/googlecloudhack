@@ -40,7 +40,7 @@ flowchart TB
     end
 
     DASH -- "GET /packs/:id" --> API
-    DASH -- "POST /run opens gate first" --> API
+    DASH -- "POST /run creates gated read-only run" --> API
     DASH -- "POST /packs/:id/decision" --> API
     API -- "/run asks diagnose role" --> DIAG
     API -- "/run asks candidate role" --> CAND
@@ -66,7 +66,7 @@ flowchart TB
 
 | Stage (UI) | Engine phase | What happens | Who does it |
 |------------|-------------|--------------|-------------|
-| **Gate** | (pre) | Approval gate opens before diagnosis; mutation is blocked | **human gate / controller** |
+| **Gate** | (pre) | `/run` creates a gated read-only run; mutation is blocked | **human gate / controller** |
 | **Detect** | (pre) | Slow query surfaced from the fixture / logs | Diagnose Agent Engine |
 | **Diagnose** | `DIAGNOSE` | Read `explain`, extract stages + counters, identify the blocking-sort root cause | Diagnose Agent Engine, deterministic code validates |
 | **Test** | `DIAGNOSE` | Compare B vs C and propose index **C** (correct ESR) from measured evidence | Candidate Agent Engine, deterministic code recomputes |
@@ -78,8 +78,8 @@ flowchart TB
 Three things make it a real plan-and-execute system (and the reason we run on
 **Agent Engine + ADK**, not the no-code console):
 
-1. **Gate-first control plane** — `/run` opens an approval gate before diagnosis,
-   and every emitted pack records that gate plus the required evidence hash.
+1. **Gated read-only run** — `/run` creates a gated run record and keeps mutation
+   impossible until the operator approves a matching EvidencePack hash.
 2. **Hash-bound approval ticket** — the controller blocks at `APPROVE` until a
    decision arrives carrying the matching `evidence_hash`. Only the decision
    route can issue the one-time ticket required by `apply_and_verify`; stale

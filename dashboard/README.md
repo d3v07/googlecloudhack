@@ -88,15 +88,16 @@ lib/
   diagnosis; during a run it is collecting evidence, then it moves to pending
   approval with the required hash.
 - **Ask the agent** calls the same-origin `/api/run` proxy, which forwards to the
-  Cloud Run API with the server-side token. The backend opens the approval gate
-  first, then asks the Diagnose, Candidate, and Rationale Agent Engine resources
-  for read-only diagnosis.
+  Cloud Run API with the server-side token. The backend creates a gated read-only
+  run, then asks the Diagnose, Candidate, and Rationale Agent Engine resources for
+  read-only diagnosis.
 - The returned pack is `diagnosed`, shown as **pending approval**. No database
   mutation happens during this step. `agent_trace` starts with `approval_gate/gate`,
   then shows the split Agent Engine role events plus deterministic validation.
-- **Approve fix** posts the displayed `evidence_hash` through the same-origin
-  decision proxy. The backend issues a one-time approval ticket and applies/verifies
-  the index only after that hash-bound approval. If the API is not configured, the
-  UI shows an error and does not fake a saved decision.
+- **Approve this evidence hash** posts the displayed `evidence_hash` through the
+  same-origin decision proxy. The backend verifies the hash, issues a one-time
+  internal apply action, and applies/verifies the index only after that hash-bound
+  approval. If the API is not configured, the UI shows an error and does not fake a
+  saved decision.
 - The trace panel and footer show when the pack came from the live API, where the
   EvidencePack aggregate and internal ledger event collections are persisted.

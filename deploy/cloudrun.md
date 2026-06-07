@@ -74,11 +74,12 @@ in the repo root and push the image to Artifact Registry automatically.
 >
 > **Agent Engine:** all three split resources are required for deploy:
 > `AGENT_ENGINE_DIAGNOSE_RESOURCE`, `AGENT_ENGINE_CANDIDATE_RESOURCE`, and
-> `AGENT_ENGINE_RATIONALE_RESOURCE`. `/run` opens the approval gate first, then
-> calls the Diagnose, Candidate, and Rationale Agent Engine resources in order.
-> The deterministic controller validates the winner/hash and emits the DIAGNOSED
-> EvidencePack. `MONGO_SECRET_NAME` is also required; production must read MongoDB
-> credentials from Secret Manager.
+> `AGENT_ENGINE_RATIONALE_RESOURCE`. `/run` creates a gated read-only run, then calls
+> the Diagnose, Candidate, and Rationale Agent Engine resources in order. Mutation remains
+> impossible until the operator approves a matching EvidencePack hash. The deterministic
+> controller validates the winner/hash and emits the DIAGNOSED EvidencePack.
+> `MONGO_SECRET_NAME` is also required; production must read MongoDB credentials from
+> Secret Manager.
 
 ### What the script does
 

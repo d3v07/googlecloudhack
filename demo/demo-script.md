@@ -50,11 +50,11 @@ This is the **prediction** — state it before showing the result.
 ## 2:10–2:35 — Approve: the human gate
 
 > "Nothing gets applied automatically. The operator sees the evidence pack — and
-> its hash — inside the gate that was opened before diagnosis — and approves. The
+> its hash — inside the gated read-only run — and approves. The
 > approval route issues the one-time ticket bound to that exact evidence hash; if
 > the evidence changed, the approval is rejected."
 
-Click **Approve fix**. The gate closes as verified after apply + verify completes.
+Click **Approve this evidence hash**. The gate closes as verified after apply + verify completes.
 
 ## 2:35–3:00 — Verify: predicted vs observed
 
