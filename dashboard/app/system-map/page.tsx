@@ -5,13 +5,14 @@ import { ControlPlaneView } from "@/components/ControlPlaneView";
 import { OversightView } from "@/components/OversightView";
 import styles from "./system-map.module.css";
 
+export const dynamic = "force-dynamic";
+
 // System Map (Layer 1) + Control Plane (Layer 3) + Agent Oversight (Layer 4) as
 // one scrolling page. Hand-built CSS architecture map (no diagram lib) so it
 // matches the console and reflows on mobile. Pulls one pack so Control Plane can
 // highlight the current run state honestly.
 export default async function SystemMapPage() {
   const { pack, source } = await loadPack();
-  const livePack = source === "live" ? pack : null;
 
   return (
     <main className={styles.main}>
@@ -51,7 +52,12 @@ export default async function SystemMapPage() {
       </section>
 
       <div className={styles.divider} />
-      <ControlPlaneView pack={livePack} />
+      {source !== "live" && (
+        <p className={styles.fallbackNote}>
+          Illustrative run state from fallback data — not a live run.
+        </p>
+      )}
+      <ControlPlaneView pack={pack} />
 
       <div className={styles.divider} />
       <OversightView hasFindings={false} />

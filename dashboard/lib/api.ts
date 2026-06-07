@@ -12,6 +12,7 @@
 
 import type { EvidencePack } from "./evidence";
 import examplePack from "./example_pack.json";
+import { FIXTURES } from "./fixtures";
 
 export type PackSource = "live" | "fallback";
 
@@ -62,9 +63,10 @@ export async function loadPacks(): Promise<PackListResult> {
   const base = apiBaseUrl();
   if (!base) {
     return {
-      packs: [EXAMPLE],
+      packs: FIXTURES,
       source: "fallback",
-      notice: "No API configured (API_URL unset) — showing the bundled example pack.",
+      notice:
+        "No API configured (API_URL unset) — showing local fixtures for every operator state (not live data).",
     };
   }
   try {
@@ -102,10 +104,13 @@ export async function loadPack(runId?: string): Promise<PackResult> {
   const id = resolveRunId(runId);
 
   if (!base) {
+    const fixture = FIXTURES.find((p) => p.run_id === id);
     return {
-      pack: EXAMPLE,
+      pack: fixture ?? EXAMPLE,
       source: "fallback",
-      notice: "No API configured (API_URL unset) — showing the bundled example pack.",
+      notice: fixture
+        ? `No API configured (API_URL unset) — showing local fixture "${id}" (not live data).`
+        : "No API configured (API_URL unset) — showing the bundled example pack.",
     };
   }
 

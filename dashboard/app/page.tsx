@@ -13,6 +13,8 @@ import { displayStatus, shortHash } from "@/lib/evidence";
 import { StatusPill } from "@/components/StatusPill";
 import styles from "./overview.module.css";
 
+export const dynamic = "force-dynamic";
+
 // Overview (Layer 1): the landing page — fleet status at a glance + the run list.
 // Reads the existing GET /packs (no new endpoint); falls back to the bundled
 // example when no API is configured.
@@ -75,7 +77,7 @@ export default async function OverviewPage() {
               const ds = displayStatus(p);
               return (
                 <li key={p.run_id} className={styles.runItem}>
-                  <Link href={`/run-review?run_id=${encodeURIComponent(p.run_id)}`} className={styles.runLink}>
+                  <Link href={`/runs/${encodeURIComponent(p.run_id)}`} className={styles.runLink}>
                     <div className={styles.runMain}>
                       <span className={styles.runId}>{p.run_id}</span>
                       <span className={styles.runNs}>{p.namespace}</span>

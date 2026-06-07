@@ -1,6 +1,8 @@
 import { AgentRunView } from "@/components/AgentRunView";
 import { loadPack } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+
 // Run Review (Layer 1): the deep single-run view — approval gate, before/after
 // explain diff, trace, finding/recommendation. Loads the initial pack (live read
 // API → fallback to the bundled example), then hands off to the interactive

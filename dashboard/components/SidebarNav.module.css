@@ -137,10 +137,16 @@
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     width: 260px;
+    /* Off-screen alone leaves links keyboard-focusable; fully remove the
+       closed drawer from the a11y/tab tree. */
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .sidebar[data-open="true"] {
     transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
   }
 
   .scrim {

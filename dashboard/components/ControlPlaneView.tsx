@@ -8,7 +8,7 @@ import {
   ArrowRight,
 } from "@phosphor-icons/react/dist/ssr";
 import type { EvidencePack } from "@/lib/evidence";
-import { displayStatus } from "@/lib/evidence";
+import { currentStateIndex, displayStatus } from "@/lib/evidence";
 import styles from "./ControlPlaneView.module.css";
 
 // Layer 3: deterministic Control Plane. Six service cards + the run state machine
@@ -94,26 +94,6 @@ const FAILURES = [
   "Verification failure",
   "Agent timeout",
 ] as const;
-
-/** Best-effort map from a pack's display status to a state-machine index. */
-function currentStateIndex(pack: EvidencePack | null): number | null {
-  if (!pack) return null;
-  const { key } = displayStatus(pack);
-  switch (key) {
-    case "pending-approval":
-      return 3; // Approval Pending
-    case "approved":
-      return 4; // Apply
-    case "verified":
-      return 6; // Closed
-    case "rejected":
-      return 6; // Closed (no mutation)
-    case "verification-failed":
-      return 5; // Verify (did not pass)
-    default:
-      return null;
-  }
-}
 
 export function ControlPlaneView({ pack }: { pack: EvidencePack | null }) {
   const current = currentStateIndex(pack);

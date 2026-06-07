@@ -11,6 +11,8 @@ import { displayStatus, shortHash } from "@/lib/evidence";
 import { StatusPill } from "@/components/StatusPill";
 import styles from "./audit.module.css";
 
+export const dynamic = "force-dynamic";
+
 // Audit & Compliance (Layer 1): approvals, verification trail, trace items, and
 // policy events. Policy events are not part of EvidencePack v1, so that section
 // shows an honest empty state.
@@ -38,7 +40,7 @@ export default async function AuditPage({
         </div>
         <p className={styles.sub}>
           Approval and verification trail for run <code>{pack.run_id}</code>.{" "}
-          <Link href={`/run-review?run_id=${encodeURIComponent(pack.run_id)}`} className={styles.link}>
+          <Link href={`/runs/${encodeURIComponent(pack.run_id)}`} className={styles.link}>
             Open in Run Review
           </Link>
           .

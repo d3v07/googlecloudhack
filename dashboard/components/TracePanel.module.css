@@ -58,6 +58,68 @@
   color: var(--green);
 }
 
+.legend {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--text-dim);
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.sectionTitle {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.sectionCaption {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.roleGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.roleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.roleName {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--amber);
+}
+
 .traceList {
   list-style: none;
   display: flex;
@@ -70,9 +132,9 @@
 .traceItem,
 .emptyTrace {
   display: grid;
-  grid-template-columns: auto minmax(220px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: auto minmax(180px, 0.8fr) minmax(0, 1.2fr);
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   min-height: 38px;
   padding: 8px 10px;
   background: var(--bg-elevated);
@@ -92,9 +154,12 @@
   color: var(--green);
 }
 
-.traceState[data-status="drift"],
-.traceState[data-status="failed"] {
+.traceState[data-status="drift"] {
   color: var(--amber);
+}
+
+.traceState[data-status="failed"] {
+  color: var(--red);
 }
 
 .traceMeta {
@@ -129,6 +194,8 @@
   border: 1px solid var(--border-bright);
   border-radius: 4px;
   padding: 2px 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .traceSummary {
@@ -136,6 +203,21 @@
   color: var(--text-dim);
   font-size: 13px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ledgerRef {
+  grid-column: 2 / -1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  overflow-wrap: anywhere;
+}
+
+.traceItem[data-failed] {
+  border-color: var(--red);
+  background: var(--red-dim);
 }
 
 .drift {
@@ -154,11 +236,19 @@
   }
 
   .traceItem {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
   }
 
+  .traceMeta {
+    grid-column: 2;
+  }
+
   .traceSummary {
+    grid-column: 2;
+  }
+
+  .ledgerRef {
     grid-column: 2;
   }
 }

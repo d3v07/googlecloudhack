@@ -13,6 +13,7 @@ import { StageIndicator } from "@/components/StageIndicator";
 import { PlanPanel } from "@/components/PlanPanel";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { ApprovalGatePanel } from "@/components/ApprovalGatePanel";
+import { StatusPill } from "@/components/StatusPill";
 import { TracePanel } from "@/components/TracePanel";
 import type { EvidencePack } from "@/lib/evidence";
 import { displayStatus, isVerificationFailed } from "@/lib/evidence";
@@ -62,16 +63,14 @@ export function AgentRunView({
       <header className={styles.topbar}>
         <div className={styles.brand}>
           <MagnifyingGlass weight="fill" size={20} className={styles.brandIcon} />
-          <span className={styles.brandName}>Run Review</span>
+          <h1 className={styles.brandName}>Run Review</h1>
         </div>
         <div className={styles.runMeta}>
           <GitBranch size={14} />
           <code>{pack.run_id}</code>
           <span className={styles.dot}>·</span>
           <code>{pack.namespace}</code>
-          <span className={styles.status} data-status={ds.key}>
-            {ds.label}
-          </span>
+          <StatusPill status={ds.key} label={ds.label} />
           <span className={styles.source} data-source={source} title={notice ?? "Live read API"}>
             {source === "live" ? <WifiHigh size={13} /> : <WifiSlash size={13} />}
             {source}

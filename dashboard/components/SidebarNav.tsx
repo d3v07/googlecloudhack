@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -26,11 +26,37 @@ const NAV = [
 export function SidebarNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
+  const firstLinkRef = useRef<HTMLAnchorElement>(null);
+  const wasOpen = useRef(false);
 
   function isActive(href: string): boolean {
     if (href === "/") return pathname === "/";
+    // /runs/<id> is the canonical run view; keep "Run Review" active there too.
+    if (href === "/run-review") return pathname.startsWith("/run-review") || pathname.startsWith("/runs");
     return pathname.startsWith(href);
   }
+
+  // Move focus into the drawer on open and back to the hamburger on close —
+  // only on a real transition, never on the initial (closed) mount.
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      firstLinkRef.current?.focus();
+    } else if (!open && wasOpen.current) {
+      hamburgerRef.current?.focus();
+    }
+    wasOpen.current = open;
+  }, [open]);
+
+  // Escape closes the drawer.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
     <>
@@ -41,16 +67,18 @@ export function SidebarNav() {
           <span className={styles.brandName}>DBRE Console</span>
         </div>
         <button
+          ref={hamburgerRef}
           className={styles.hamburger}
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? "Close navigation" : "Open navigation"}
+          aria-controls="sidebar-nav"
           aria-expanded={open}
         >
           {open ? <X size={22} /> : <List size={22} />}
         </button>
       </div>
 
-      <aside className={styles.sidebar} data-open={open}>
+      <aside id="sidebar-nav" className={styles.sidebar} data-open={open}>
         <div className={styles.brand}>
           <Database weight="fill" size={22} className={styles.brandIcon} />
           <div className={styles.brandText}>
@@ -60,12 +88,14 @@ export function SidebarNav() {
         </div>
 
         <nav className={styles.nav}>
-          {NAV.map(({ href, label, icon: Icon }) => (
+          {NAV.map(({ href, label, icon: Icon }, i) => (
             <Link
               key={href}
+              ref={i === 0 ? firstLinkRef : undefined}
               href={href}
               className={styles.link}
               data-active={isActive(href)}
+              aria-current={isActive(href) ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
               <Icon size={18} weight={isActive(href) ? "fill" : "regular"} />

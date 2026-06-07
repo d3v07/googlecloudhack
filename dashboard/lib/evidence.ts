@@ -135,19 +135,19 @@ export function formatIndexSpec(spec: IndexKey[]): string {
 }
 
 /**
- * Whether a verified/applied pack actually shows a clean (sort-removed) plan, or
- * the apply ran but verification did not confirm the fix. Used to distinguish the
- * "verification failed" state from the happy "verified" state in the UI.
+ * Whether the human-approved index was applied but verification did NOT pass.
+ *
+ * Backend truth (controller/orchestrator.py): after a human approve, the
+ * controller applies the index, captures after-evidence, and sets
+ * status=VERIFIED iff all strict checks pass, else status=APPROVED with `after`
+ * populated. So an `approved` pack that has `after` is precisely the
+ * "applied, verification failed" state. VERIFIED is never derived here.
  */
 export function isVerificationFailed(pack: {
   status: PackStatus;
   after: Evidence | null;
 }): boolean {
-  if (pack.status !== "verified") return false;
-  // verified should mean the after-plan dropped the blocking sort; if after is
-  // missing or still has a blocking sort, treat it as a failed/incomplete verify.
-  if (!pack.after) return true;
-  return pack.after.metrics.has_blocking_sort === true;
+  return pack.status === "approved" && pack.after !== null;
 }
 
 /**
@@ -173,7 +173,9 @@ export function displayStatus(pack: {
     case "diagnosed":
       return { key: "pending-approval", label: "pending approval" };
     case "approved":
-      return { key: "approved", label: "approved" };
+      // after === null here (verification-failed handled above): applied,
+      // verification not yet captured.
+      return { key: "approved", label: "applying — verification pending" };
     case "verified":
       return { key: "verified", label: "verified" };
     case "rejected":
@@ -185,4 +187,28 @@ export function displayStatus(pack: {
 export function shortHash(hash: string): string {
   if (hash.length <= 16) return hash;
   return `${hash.slice(0, 8)}…${hash.slice(-6)}`;
+}
+
+/**
+ * Best-effort map from a pack to a Control Plane state-machine index
+ * (Intake, Diagnose, Candidate Review, Approval Pending, Apply, Verify, Closed).
+ * Returns null when the run state is not derivable.
+ */
+export function currentStateIndex(pack: { status: PackStatus; after: Evidence | null } | null): number | null {
+  if (!pack) return null;
+  const { key } = displayStatus(pack);
+  switch (key) {
+    case "pending-approval":
+      return 3; // Approval Pending
+    case "approved":
+      return 4; // Apply
+    case "verified":
+      return 6; // Closed
+    case "rejected":
+      return 6; // Closed (no mutation)
+    case "verification-failed":
+      return 5; // Verify (did not pass)
+    default:
+      return null;
+  }
 }

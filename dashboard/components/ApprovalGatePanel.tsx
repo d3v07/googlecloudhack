@@ -10,7 +10,7 @@ import {
   XCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import type { ApprovalGateState, EvidencePack } from "@/lib/evidence";
-import { shortHash } from "@/lib/evidence";
+import { isVerificationFailed, shortHash } from "@/lib/evidence";
 import { submitDecision, type DecisionKind } from "@/lib/approval";
 import styles from "./ApprovalGatePanel.module.css";
 
@@ -60,15 +60,19 @@ export function ApprovalGatePanel({
   const approvedHash = gate?.approved_hash;
   const mutationBlocked = running || !gate?.mutation_allowed;
   const legacy = !gate;
+  const verificationFailed = isVerificationFailed(pack);
 
   const statusText = useMemo(() => {
     if (legacy) return "Legacy pack: re-run to open a first-class approval gate.";
-    if (running) return "Gate is open and collecting evidence before any mutation can happen.";
+    if (running)
+      return "/run creates a gated read-only run. Mutation remains impossible until the operator approves a matching EvidencePack hash.";
     if (pending) return "Human approval is required before the controller can apply an index.";
+    if (verificationFailed)
+      return "Index applied, but verification did not pass — the blocking sort remains. See the trace.";
     if (gateState === "verified") return "Approved mutation was applied and verified.";
     if (gateState === "rejected") return "The gate is closed without mutation.";
     return "The gate has closed for this evidence pack.";
-  }, [gateState, legacy, pending, running]);
+  }, [gateState, legacy, pending, running, verificationFailed]);
 
   async function decide(decision: DecisionKind) {
     setBusy(decision);
@@ -95,7 +99,7 @@ export function ApprovalGatePanel({
         </div>
         <div>
           <p className={styles.eyebrow}>Human Operator / Judge</p>
-          <h1>Approval Gate</h1>
+          <h2>Approval Gate</h2>
         </div>
       </div>
 
@@ -113,7 +117,7 @@ export function ApprovalGatePanel({
       <div className={styles.hashBlock}>
         <Fingerprint size={16} />
         <span>full evidence hash</span>
-        <code>{approvedHash ?? hash}</code>
+        <code title={approvedHash ?? hash}>{approvedHash ?? hash}</code>
       </div>
 
       <div className={styles.actions}>
@@ -126,7 +130,7 @@ export function ApprovalGatePanel({
             which hash they are signing */}
         <span className={styles.ctaHash}>
           <Fingerprint size={13} />
-          {shortHash(approvedHash ?? hash)}
+          {shortHash(hash)}
         </span>
         <button
           className={styles.reject}

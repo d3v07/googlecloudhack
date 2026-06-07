@@ -5,6 +5,8 @@ import { displayStatus, shortHash, formatIndexSpec } from "@/lib/evidence";
 import { StatusPill } from "@/components/StatusPill";
 import styles from "./history.module.css";
 
+export const dynamic = "force-dynamic";
+
 // History & Compare (Layer 1): past runs + outcomes, derived from the existing
 // GET /packs (no new endpoint). A compact comparison table of run → status →
 // recommended index → outcome.
@@ -72,7 +74,7 @@ export default async function HistoryPage() {
                     </td>
                     <td className={styles.actionCell}>
                       <Link
-                        href={`/run-review?run_id=${encodeURIComponent(p.run_id)}`}
+                        href={`/runs/${encodeURIComponent(p.run_id)}`}
                         className={styles.review}
                       >
                         Review <ArrowRight size={13} />

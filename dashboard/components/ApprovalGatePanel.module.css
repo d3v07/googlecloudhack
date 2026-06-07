@@ -37,7 +37,7 @@
   color: var(--text-faint);
 }
 
-.identity h1 {
+.identity h2 {
   margin: 0;
   font-size: 22px;
   line-height: 1.1;
@@ -114,9 +114,10 @@
 
 .hashBlock code {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Full hash must be readable in place — wrap/break instead of silently
+     truncating with an ellipsis. */
+  overflow-wrap: anywhere;
+  word-break: break-all;
   font-family: var(--mono);
   font-size: 12px;
   color: var(--text-dim);

@@ -8,7 +8,7 @@
       "resource": null,
       "stage": "gate",
       "status": "ok",
-      "summary": "Approval gate opened before diagnosis.",
+      "summary": "Approval gate created a gated read-only run; mutation stays impossible until a matching evidence hash is approved.",
       "tool": "approval_gate"
     },
     {
