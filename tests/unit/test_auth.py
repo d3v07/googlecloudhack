@@ -106,7 +106,9 @@ def _signed(header_json: bytes, payload_b64: str) -> str:
     import hmac
 
     head = _b64e(header_json)
-    sig = _b64e(hmac.new(SECRET.encode(), f"{head}.{payload_b64}".encode(), hashlib.sha256).digest())
+    sig = _b64e(
+        hmac.new(SECRET.encode(), f"{head}.{payload_b64}".encode(), hashlib.sha256).digest()
+    )
     return f"{head}.{payload_b64}.{sig}"
 
 

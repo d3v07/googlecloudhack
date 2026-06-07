@@ -126,24 +126,36 @@ curl -sf "${SERVICE_URL}/packs/RUN_ID"
 # 404 if pack doesn't exist
 ```
 
-**Trigger a DIAGNOSE-only live run (#37 — read-only, no mutation):**
+**Authenticate as the DBRE — the write endpoints now also require a session bearer:**
 ```bash
+TOKEN=$(curl -sf -X POST "${SERVICE_URL}/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"dbre","password":"<dbre-password>"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+```
+
+**Diagnose a captured query (a user must first run a workload so the queue is non-empty):**
+```bash
+# CAPTURED_ID comes from GET /workload/slow-queries (DBRE bearer required)
 curl -sf -X POST "${SERVICE_URL}/run" \
-  -H "Content-Type: application/json" -H "X-API-Token: ${RUN_API_TOKEN}" -d '{}'
-# Expected: 200 + a DIAGNOSED EvidencePack (run_id "run-…", approval_gate
-# pending_approval, first agent_trace event approval_gate/gate, before≈17209 keys,
-# blocking sort, severity high, recommendation, Agent Engine tool events). No index
-# is applied yet. (401 without a valid X-API-Token.)
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: ${RUN_API_TOKEN}" -H "Authorization: Bearer ${TOKEN}" \
+  -d "{\"captured_query_id\": \"CAPTURED_ID\"}"
+# Expected: 200 + a DIAGNOSED EvidencePack for that captured query (blocking sort,
+# severity high, ESR recommendation). No index is applied yet.
+# 401 without a valid bearer; 403 if the session is not the DBRE role.
 ```
 
 **Approve → apply + verify (the human-gated mutation):**
 ```bash
 curl -sf -X POST "${SERVICE_URL}/packs/RUN_ID/decision" \
-  -H "Content-Type: application/json" -H "X-API-Token: ${RUN_API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Token: ${RUN_API_TOKEN}" -H "Authorization: Bearer ${TOKEN}" \
   -d '{"decision": "approve", "evidence_hash": "<hash-from-pack>"}'
 # Issues a hash-bound approval ticket, applies the recommended index, and verifies
-# → 200 + a VERIFIED pack (after≈64 keys, no sort).
-# 409 stale_evidence_hash if the hash doesn't match; 409 already_decided if not DIAGNOSED.
+# → 200 + a VERIFIED pack (no blocking sort, far fewer docs examined). The approver is
+# taken from the verified DBRE session, not the request body.
+# 401/403 without a valid DBRE bearer; 409 stale_evidence_hash / already_decided.
 ```
 
 **Ledger records:** a completed approve flow creates or updates deterministic

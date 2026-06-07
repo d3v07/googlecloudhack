@@ -69,6 +69,20 @@ def test_assert_safe_query_rejects_bad_sort() -> None:
 
 
 @pytest.mark.parametrize(
+    "bad_age",
+    [
+        {"customer.age": {"$gte": 10}},  # below 16
+        {"customer.age": {"$lte": 99}},  # above 75
+        {"customer.age": {"$gte": "30"}},  # string, not int
+        {"customer.age": {"$gte": True}},  # bool masquerading as int
+    ],
+)
+def test_assert_safe_query_rejects_age_value_shape(bad_age: dict) -> None:
+    with pytest.raises(WorkloadSpecError):
+        assert_safe_query(bad_age, [])
+
+
+@pytest.mark.parametrize(
     "spec",
     [
         QuerySpec(store_location="Mars"),

@@ -170,6 +170,15 @@ def assert_safe_query(query_filter: dict, query_sort: list[tuple[str, int]]) -> 
         if key == "customer.age":
             if not isinstance(value, dict) or not set(value).issubset(_ALLOWED_RANGE_OPS):
                 raise WorkloadSpecError("customer.age must be a {$gte,$lte} range")
+            for bound in value.values():
+                if (
+                    isinstance(bound, bool)
+                    or not isinstance(bound, int)
+                    or not (AGE_MIN <= bound <= AGE_MAX)
+                ):
+                    raise WorkloadSpecError(
+                        f"customer.age bound out of range [{AGE_MIN},{AGE_MAX}]: {bound!r}"
+                    )
         elif not isinstance(value, str):
             raise WorkloadSpecError(f"{key} must be an equality value")
     for field, direction in query_sort:
