@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   MagnifyingGlass,
   GitBranch,
@@ -40,6 +40,7 @@ export function AgentRunView({
   initialNotice?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [pack, setPack] = useState<EvidencePack>(initialPack);
   // source/notice are fixed for this rendered run: "Ask" navigates to a fresh
   // run rather than mutating in place, and approving a pack never changes its
@@ -58,7 +59,15 @@ export function AgentRunView({
     if (res.ok && res.pack) {
       // Navigate to the produced run; loadPack on that page resolves the honest
       // source (live from the read API, or simulation when no backend is set).
-      router.push(`/runs/${encodeURIComponent(res.pack.run_id)}`);
+      const target = `/runs/${encodeURIComponent(res.pack.run_id)}`;
+      if (pathname === target) {
+        // Same run id (e.g. re-running the simulation while already here): a push
+        // is a no-op and would never clear the spinner — refresh in place instead.
+        router.refresh();
+        setRunning(false);
+      } else {
+        router.push(target);
+      }
       return;
     }
     setRunning(false);
