@@ -130,7 +130,14 @@ def teardown(resource_name: str) -> None:  # pragma: no cover - live deploy
     print(f"TEARDOWN=engine_deleted resource={resource_name}")
 
 
+_SMOKE_QUERY_JSON = (
+    '{"filter": {"purchaseMethod": "Phone", "customer.age": {"$gte": 55, "$lte": 75}}, '
+    '"sort": [["saleDate", -1]], "limit": 15}'
+)
+
+
 def _smoke_prompt(role: AgentRole) -> str:
+    q = f"Pass this exact JSON string as the `query_json` argument to every tool:\n{_SMOKE_QUERY_JSON}\n"
     prompts = {
         AgentRole.DIAGNOSE: (
             "Run explain_slow_query and diagnose_candidate. Return compact JSON with "
@@ -151,7 +158,7 @@ def _smoke_prompt(role: AgentRole) -> str:
             "and rationale. Do not mutate the database."
         ),
     }
-    return prompts[role]
+    return f"{prompts[role]}\n\n{q}"
 
 
 async def smoke(

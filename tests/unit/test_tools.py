@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from agents import native_mongo_tools
@@ -5,6 +7,8 @@ from agents.tools import diagnose_index, diagnosis_from_explain, extract_explain
 from controller.schemas import Evidence, EvidenceMetrics
 
 QUERY_FILTER = {"storeLocation": "Denver", "customer.age": {"$gte": 30, "$lte": 50}}
+QUERY_SORT = [["saleDate", -1]]
+QUERY_JSON = json.dumps({"filter": QUERY_FILTER, "sort": QUERY_SORT, "limit": 20})
 EXPECTED_C = [["storeLocation", 1], ["saleDate", -1], ["customer.age", 1]]
 
 
@@ -164,63 +168,100 @@ def test_native_tool_module_has_no_index_mutation_calls():
 def test_native_explain_slow_query_returns_canonical_evidence(monkeypatch):
     monkeypatch.setattr(
         native_mongo_tools,
-        "_capture_with_hint",
-        lambda hint: _evidence(has_blocking_sort=True, keys_examined=17209),
+        "_capture",
+        lambda query_filter, query_sort, limit: _evidence(
+            has_blocking_sort=True, keys_examined=17209
+        ),
     )
 
-    payload = native_mongo_tools.explain_slow_query()
+    payload = native_mongo_tools.explain_slow_query(QUERY_JSON)
 
     assert payload["namespace"] == "sample_supplies.sales_agent_demo"
-    assert payload["hint"] == "esr_wrong_B"
+    assert payload["query"]["filter"] == QUERY_FILTER
+    assert payload["query"]["sort"] == QUERY_SORT
     assert payload["metrics"]["total_keys_examined"] == 17209
     assert payload["metrics"]["has_blocking_sort"] is True
 
 
-def test_native_compare_candidate_indexes_selects_c(monkeypatch):
-    def fake_capture(hint):
-        if hint == "esr_wrong_B":
-            return _evidence(has_blocking_sort=True, keys_examined=17209)
-        return _evidence(has_blocking_sort=False, keys_examined=64)
+def test_native_compare_candidate_indexes_selects_esr(monkeypatch):
+    monkeypatch.setattr(
+        native_mongo_tools,
+        "_capture",
+        lambda query_filter, query_sort, limit: _evidence(
+            has_blocking_sort=True, keys_examined=17209
+        ),
+    )
 
-    monkeypatch.setattr(native_mongo_tools, "_capture_with_hint", fake_capture)
+    payload = native_mongo_tools.compare_candidate_indexes(QUERY_JSON)
 
-    payload = native_mongo_tools.compare_candidate_indexes()
-
-    assert payload["winner"] == "esr_right_C"
-    assert payload["candidates"][0]["name"] == "esr_wrong_B"
-    assert payload["candidates"][1]["name"] == "esr_right_C"
+    assert payload["winner"] == "esr_recommended"
+    assert payload["candidates"][0]["name"] == "current_plan"
+    assert payload["candidates"][0]["has_blocking_sort"] is True
+    assert payload["candidates"][1]["name"] == "esr_recommended"
     assert payload["candidates"][1]["index_spec"] == EXPECTED_C
 
 
 def test_native_diagnose_candidate_uses_deterministic_esr(monkeypatch):
     monkeypatch.setattr(
         native_mongo_tools,
-        "_capture_with_hint",
-        lambda hint: _evidence(has_blocking_sort=True, keys_examined=17209),
+        "_capture",
+        lambda query_filter, query_sort, limit: _evidence(
+            has_blocking_sort=True, keys_examined=17209
+        ),
     )
 
-    payload = native_mongo_tools.diagnose_candidate()
+    payload = native_mongo_tools.diagnose_candidate(QUERY_JSON)
 
     assert payload["source"] == "deterministic_esr"
     assert payload["diagnosis"]["recommendation"]["index_spec"] == EXPECTED_C
+    assert payload["recommended_index"] == EXPECTED_C
     assert payload["diagnosis"]["finding"]["severity"] == "high"
 
 
 def test_native_rationalize_recommendation_is_evidence_grounded(monkeypatch):
-    def fake_capture(hint):
-        if hint == "esr_wrong_B":
-            return _evidence(has_blocking_sort=True, keys_examined=17209)
-        return _evidence(has_blocking_sort=False, keys_examined=64)
+    monkeypatch.setattr(
+        native_mongo_tools,
+        "_capture",
+        lambda query_filter, query_sort, limit: _evidence(
+            has_blocking_sort=True, keys_examined=17209
+        ),
+    )
 
-    monkeypatch.setattr(native_mongo_tools, "_capture_with_hint", fake_capture)
-
-    payload = native_mongo_tools.rationalize_recommendation()
+    payload = native_mongo_tools.rationalize_recommendation(QUERY_JSON)
 
     assert payload["recommended_index"] == EXPECTED_C
     assert "17209" in payload["rationale"]
-    assert "64" in payload["rationale"]
-    assert payload["evidence"]["before_has_blocking_sort"] is True
-    assert payload["evidence"]["after_has_blocking_sort"] is False
+    assert payload["evidence"]["keys_examined"] == 17209
+    assert payload["evidence"]["has_blocking_sort"] is True
+
+
+def test_native_rationalize_recommendation_handles_no_blocking_sort(monkeypatch):
+    monkeypatch.setattr(
+        native_mongo_tools,
+        "_capture",
+        lambda query_filter, query_sort, limit: _evidence(
+            has_blocking_sort=False, keys_examined=64
+        ),
+    )
+
+    payload = native_mongo_tools.rationalize_recommendation(QUERY_JSON)
+
+    assert "over-scans the collection" in payload["rationale"]
+    assert "blocking in-memory SORT" not in payload["rationale"]
+    assert payload["evidence"]["has_blocking_sort"] is False
+
+
+def test_parse_query_defaults_empty_to_browse_shape():
+    assert native_mongo_tools._parse_query("{}") == ({}, [], 20)
+
+
+def test_parse_query_unwraps_wrapper_and_coerces_sort_direction():
+    f, s, limit = native_mongo_tools._parse_query(
+        json.dumps({"query": {"filter": QUERY_FILTER, "sort": [["saleDate", "-1"]], "limit": 15}})
+    )
+    assert f == QUERY_FILTER
+    assert s == [("saleDate", -1)]  # string direction coerced to int
+    assert limit == 15
 
 
 def test_native_connection_string_error_names_agent_engine_secret_name(monkeypatch):
@@ -232,7 +273,7 @@ def test_native_connection_string_error_names_agent_engine_secret_name(monkeypat
         native_mongo_tools._require_connection_string()
 
 
-def test_native_capture_with_hint_uses_env_connection_and_closes_client(monkeypatch):
+def test_native_capture_uses_env_connection_and_closes_client(monkeypatch):
     explained = {
         "queryPlanner": {
             "winningPlan": {
@@ -255,9 +296,10 @@ def test_native_capture_with_hint_uses_env_connection_and_closes_client(monkeypa
 
     monkeypatch.setattr(pymongo, "MongoClient", _FakeMongoClient)
 
-    evidence = native_mongo_tools._capture_with_hint("esr_wrong_B")
+    evidence = native_mongo_tools._capture(QUERY_FILTER, [("saleDate", -1)], 20)
 
     assert evidence.metrics.total_keys_examined == 17209
     assert evidence.metrics.has_blocking_sort is True
-    assert _FakeMongoClient.collection.cursor.hinted_with == "esr_wrong_B"
+    assert _FakeMongoClient.collection.cursor.hinted_with is None  # natural plan, no hint
+    assert _FakeMongoClient.collection.last_find["filter"] == QUERY_FILTER
     assert _FakeMongoClient.closed is True

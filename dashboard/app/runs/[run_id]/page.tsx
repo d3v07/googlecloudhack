@@ -1,5 +1,6 @@
 import { AgentRunView } from "@/components/AgentRunView";
 import { loadPack } from "@/lib/api";
+import { loadSiftMemory } from "@/lib/siftMemory.server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,14 @@ export default async function RunPage({
 }) {
   const { run_id } = await params;
   const { pack, source, notice } = await loadPack(run_id);
+  const memory = source === "live" ? await loadSiftMemory(pack.run_id) : null;
 
-  return <AgentRunView initialPack={pack} initialSource={source} initialNotice={notice} />;
+  return (
+    <AgentRunView
+      initialPack={pack}
+      initialSource={source}
+      initialNotice={notice}
+      initialMemory={memory}
+    />
+  );
 }

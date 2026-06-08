@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="DBRE mark">
+  <defs>
+    <linearGradient id="rail" x1="40" y1="188" x2="210" y2="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5cc8e6"/>
+      <stop offset="0.52" stop-color="#f5b342"/>
+      <stop offset="1" stop-color="#4ec98f"/>
+    </linearGradient>
+    <linearGradient id="core" x1="82" y1="58" x2="170" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#dff8ff"/>
+      <stop offset="1" stop-color="#77f2b4"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    d="M52 74h38c28 0 40 20 54 54 13 33 27 54 58 54h6"
+    fill="none"
+    stroke="#5cc8e6"
+    stroke-width="15"
+    stroke-linecap="round"
+    opacity=".92"
+  />
+  <path
+    d="M52 128h52c22 0 38 0 56-28 13-20 26-26 48-26"
+    fill="none"
+    stroke="#f5b342"
+    stroke-width="15"
+    stroke-linecap="round"
+    opacity=".92"
+  />
+  <path
+    d="M52 182h28c29 0 44-21 62-54 17-31 33-54 68-54"
+    fill="none"
+    stroke="#4ec98f"
+    stroke-width="15"
+    stroke-linecap="round"
+    opacity=".92"
+  />
+
+  <path
+    d="M128 47 187 81v67l-59 34-59-34V81l59-34Z"
+    fill="#0d1117"
+    stroke="url(#rail)"
+    stroke-width="7"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M100 94h56M100 128h56M100 162h34"
+    fill="none"
+    stroke="url(#core)"
+    stroke-width="10"
+    stroke-linecap="round"
+  />
+  <circle cx="52" cy="74" r="9" fill="#5cc8e6"/>
+  <circle cx="52" cy="128" r="9" fill="#f5b342"/>
+  <circle cx="52" cy="182" r="9" fill="#4ec98f"/>
+  <circle cx="210" cy="74" r="9" fill="#4ec98f"/>
+  <circle cx="208" cy="182" r="9" fill="#4ec98f"/>
+</svg>

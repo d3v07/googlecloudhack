@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from api.auth import optional_dbre_identity
+from api.auth import ROLE_DBRE, optional_dbre_identity, require_role
+from api.memory import MemoryResponse, VoyageMemoryService, get_memory_service
 from api.workload import WorkloadService, get_workload_service_optional
 from controller.auth import Identity
 from controller.orchestrator import ApprovalTicket, issue_approval_ticket
@@ -64,6 +65,7 @@ def get_engine() -> Engine:
 
 StoreDep = Annotated[PackStore, Depends(get_store)]
 EngineDep = Annotated[Engine, Depends(get_engine)]
+MemoryDep = Annotated[VoyageMemoryService, Depends(get_memory_service)]
 
 
 @router.get("/health")
@@ -82,6 +84,19 @@ def get_pack(run_id: str, store: StoreDep) -> dict:
     if pack is None:
         raise HTTPException(status_code=404, detail=f"pack '{run_id}' not found")
     return pack.model_dump(mode="json")
+
+
+@router.get("/packs/{run_id}/memory", response_model=MemoryResponse)
+def get_pack_memory(
+    run_id: str,
+    store: StoreDep,
+    memory: MemoryDep,
+    _identity: Annotated[Identity, Depends(require_role(ROLE_DBRE))],
+) -> MemoryResponse:
+    pack = store.get_pack(run_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail=f"pack '{run_id}' not found")
+    return memory.lookup(pack)
 
 
 class RunRequest(BaseModel):
@@ -123,6 +138,14 @@ async def trigger_run(
             assert_safe_query(query.query_filter, query.query_sort)
         except WorkloadSpecError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # A query with neither a filter nor a sort has no equality/sort/range structure, so the
+        # ESR rule yields an empty index — undiagnosable. Reject cleanly rather than letting the
+        # frozen Recommendation(min_length=1) raise a 500 deep in the controller/agent path.
+        if not query.query_filter and not query.query_sort:
+            raise HTTPException(
+                status_code=422,
+                detail="captured query has no filter or sort to index; nothing to diagnose",
+            )
     pack = await engine.diagnose(run_id, query)
     store.save_pack(pack)
     return pack.model_dump(mode="json")

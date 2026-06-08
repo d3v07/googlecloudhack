@@ -1,26 +1,25 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SidebarNav } from "@/components/SidebarNav";
 import { getSession } from "@/lib/auth";
 import layout from "./layout.module.css";
 
-// Non-default typography (see globals.css rationale).
-const mono = JetBrains_Mono({
+// Slate kit typography: Geist + Geist Mono — single-family discipline (see globals.css).
+const sans = Geist({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const mono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
   display: "swap",
 });
 
-const sans = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-sans",
-  display: "swap",
-});
-
 export const metadata: Metadata = {
-  title: "DBRE Console — Evidence-Driven Agent",
+  title: "Sift — Evidence-Driven DBRE",
   description:
     "Operator console for the Evidence-Driven DBRE agent: run workloads, triage slow queries, and approve the index fix.",
 };

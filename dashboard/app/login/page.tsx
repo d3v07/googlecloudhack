@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Database, SignIn } from "@phosphor-icons/react/dist/ssr";
+import { SignIn } from "@phosphor-icons/react/dist/ssr";
 
+import { Logo } from "@/components/Logo";
 import styles from "./login.module.css";
 
 export default function LoginPage() {
@@ -45,8 +46,8 @@ export default function LoginPage() {
     <main className={styles.wrap}>
       <form className={styles.card} onSubmit={onSubmit}>
         <div className={styles.brand}>
-          <Database weight="fill" size={26} />
-          <span>DBRE Console</span>
+          <Logo size={26} />
+          <span>Sift</span>
         </div>
         <p className={styles.tagline}>
           Sign in to run database workloads, or to triage the slowest queries.

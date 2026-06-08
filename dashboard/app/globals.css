@@ -1,26 +1,26 @@
 /*
- * DBRE console — design system.
+ * Sift — design system (Slate kit).
  *
- * Deliberately NON-default (issue #10 acceptance criterion): no Inter, no
- * purple gradient, no Lucide. This is a dark engineering-operations aesthetic
- * fitting a database-reliability instrument:
- *   - Headings / data: JetBrains Mono (monospace — echoes explain output)
- *   - Body: IBM Plex Sans
- *   - Palette: deep slate background, amber = attention/pending, green = good
- *     plan, red = regression. Accents borrowed from query-plan semantics.
+ * Dark, dense, dev-tooling aesthetic for a database-reliability instrument —
+ * the lineage of Linear / Vercel / Raycast. Single-family type discipline:
+ *   - Sans + data: Geist
+ *   - Mono (explain output, IDs, hashes): Geist Mono
+ *   - Surfaces: cool near-blue blacks. Accent = signal cyan (matches the mark).
+ *     amber = attention/pending, green = good plan, red = regression — kept from
+ *     query-plan semantics as the brand's signal palette.
  *   - Icons: Phosphor (set in components).
  */
 
 :root {
-  --bg: #0d1117;
-  --bg-panel: #161b22;
-  --bg-elevated: #1c2230;
-  --border: #2a3340;
-  --border-bright: #3b4656;
+  --bg: #0a0b0f;
+  --bg-panel: #13151b;
+  --bg-elevated: #1b1e27;
+  --border: #262934;
+  --border-bright: #3a3e4d;
 
-  --text: #e6edf3;
-  --text-dim: #9aa7b4;
-  --text-faint: #5c6b7a;
+  --text: #eef0f6;
+  --text-dim: #a0a4b5;
+  --text-faint: #5a5e6e;
 
   --amber: #f5b342;       /* pending / attention */
   --amber-dim: #6b5320;
@@ -28,12 +28,12 @@
   --green-dim: #1f5b41;
   --red: #f06a5e;         /* regression / blocking */
   --red-dim: #5e2722;
-  --cyan: #5cc8e6;        /* neutral data accent */
+  --cyan: #5cc8e6;        /* signal accent — matches the Sift mark */
 
   --mono: var(--font-mono), ui-monospace, "Cascadia Code", "Fira Code", monospace;
   --sans: var(--font-sans), system-ui, -apple-system, sans-serif;
 
-  --radius: 6px;
+  --radius: 8px;
 }
 
 * {

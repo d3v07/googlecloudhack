@@ -138,6 +138,8 @@ class _LiveEngine:  # pragma: no cover - live
             current_index = INDEX_B_NAME
 
         agent_failure: Exception | None = None
+        # The Agent Engine narrates and supplies before-evidence for the captured (or fixture)
+        # query; the deterministic controller still computes and hash-binds the recommendation.
         if self._diagnosis_agent is not None:
             try:
                 return await run_agent_diagnosis(
@@ -245,14 +247,18 @@ def create_app(
                 target = client[NAMESPACE_DB][NAMESPACE_COLL]
                 workload_service = MongoWorkloadService(target, state_db["query_log"])
             if engine is None:
-                # Production requires the split Agent Engine; a local connection runs the
-                # deterministic controller (no Vertex), which still produces a valid pack.
-                agent = (
-                    diagnosis_agent_from_env(require_split=True, allow_legacy=False)
-                    if secret_mode
-                    else None
+                # Use the split Agent Engine when configured — mandatory in production
+                # (secret_mode), optional locally. The agent narrates and supplies before-
+                # evidence; the deterministic controller always computes and hash-binds the
+                # recommendation. Fallback keeps a transient Vertex error from failing the run
+                # — the pack is still valid because the controller is the source of truth.
+                agent = diagnosis_agent_from_env(require_split=secret_mode, allow_legacy=False)
+                engine = _LiveEngine(
+                    conn,
+                    agent,
+                    MongoLedgerStore(state_db),
+                    allow_agent_fallback=agent is not None,
                 )
-                engine = _LiveEngine(conn, agent, MongoLedgerStore(state_db))
         else:
             packs_dir = Path(os.getenv("PACKS_DIR", "runs"))
             store = LocalFilePackStore(packs_dir) if packs_dir.exists() else _EmptyPackStore()
