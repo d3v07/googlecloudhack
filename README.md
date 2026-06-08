@@ -37,6 +37,22 @@ DBRE  ─ login ─> Slow-Query Queue (ranked by evidence)
 
 The dashboard reads only `EvidencePack` v1 JSON; that contract is frozen in `contracts/`.
 
+## Partner integration — MongoDB via MCP
+
+The agent reads MongoDB through MongoDB's official **MCP server** (`mongodb-mcp-server`). Prove it
+live in one command — it spawns the MCP server, runs the MCP handshake, calls the `explain` tool
+against Atlas, and prints the HIGH finding + ESR recommendation derived from the real plan:
+
+```bash
+uv run --with python-dotenv python -m agents.run
+```
+
+The MCP wiring lives in `agents/agent.py` (`build_mcp_toolset`, ADK `MCPToolset`) and
+`agents/run.py` (raw stdio JSON-RPC). In the managed Vertex AI Agent Engine runtime the same
+read-only operations run as native Python tools (`agents/native_mongo_tools.py`), because MCP's
+stdio transport can't run inside that sandbox — so the MCP integration is demonstrated locally /
+controller-side and the production agent uses the native equivalents.
+
 ## Quickstart
 
 ```bash
