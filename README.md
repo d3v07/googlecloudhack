@@ -1,4 +1,4 @@
-# Evidence-Driven DBRE Agent
+# Sift — Evidence-Driven DBRE Agent
 
 > A MongoDB reliability agent that watches real query workloads, catches the slow ones with
 > hard `explain` evidence, and won't touch an index until a human approves the exact hash it
@@ -18,14 +18,18 @@ Two personas, one performance loop: **users** run real queries against a live co
 **DBRE** triages the *actual* slowest ones, and a Gemini-powered agent proposes an ESR-correct
 index that a deterministic controller applies and verifies — behind a hash-bound human gate.
 
+**Hosted demo:** [gcrah-dashboard-2vbnam7yma-uc.a.run.app](https://gcrah-dashboard-2vbnam7yma-uc.a.run.app)
+
 ## Table of contents
 
 - [The idea](#the-idea)
 - [What makes it different](#what-makes-it-different)
+- [Screenshots](#screenshots)
 - [The two-persona flow](#the-two-persona-flow)
 - [Architecture](#architecture)
 - [The remediation lifecycle](#the-remediation-lifecycle)
 - [Partner integration — MongoDB via MCP](#partner-integration--mongodb-via-mcp)
+- [Sift Memory — Voyage AI retrieval](#sift-memory--voyage-ai-retrieval)
 - [Safety model](#safety-model)
 - [Tech stack](#tech-stack)
 - [Repo layout](#repo-layout)
@@ -52,6 +56,43 @@ verification proves.**
 | "Trust the model" | A **hash-bound human approval** is required before any index is created |
 | "It looks faster" | A re-`explain` proves the blocking SORT is gone and docs-examined dropped |
 | A chat box | A multi-step task: detect → diagnose → approve → apply → verify |
+
+## Screenshots
+
+### User workload console
+
+Dev Trivedi and Aakash Singh run guided, read-only MongoDB workloads against the live demo
+collection. Each run is captured with `explain` evidence and user attribution.
+
+![Sift workload console](demo/screenshots/submission/02-workload-console.png)
+
+### DBRE slow-query queue
+
+The DBRE sees the real captured workload ranked by evidence: blocking sort, collection scan,
+over-scan ratio, keys examined, and the user who caused the query.
+
+![Sift DBRE slow-query queue](demo/screenshots/submission/03-dbre-queue.png)
+
+### Hash-bound run review
+
+Run Review shows the approval gate, full evidence hash, three read-only Agent Engine roles,
+four read-only diagnosis tools, deterministic validation, and Sift Memory as read-only context.
+
+![Sift run review](demo/screenshots/submission/04-run-review.png)
+
+### System map
+
+The system map makes the safety boundary explicit: browser dashboard → Cloud Run API →
+read-only Agent Engine roles + Sift Memory → deterministic controller → MongoDB + ledger.
+
+![Sift system map](demo/screenshots/submission/05-system-map.png)
+
+### Mobile operator view
+
+The Run Review surface remains usable on a 390px mobile viewport, including long hashes, trace
+rows, and the Sift Memory panel.
+
+![Sift mobile run review](demo/screenshots/submission/06-run-review-mobile.png)
 
 ## The two-persona flow
 
@@ -119,6 +160,18 @@ read-only operations run as native Python tools (`agents/native_mongo_tools.py`)
 stdio transport can't run inside that sandbox — so the MCP integration is demonstrated locally /
 controller-side and the production agent uses the native equivalents.
 
+## Sift Memory — Voyage AI retrieval
+
+Run Review can attach DBRE-only retrieval context using Voyage AI embeddings and reranking. This
+is deliberately **out-of-band**: memory helps the operator inspect similar runbook guidance, but
+it never changes the `EvidencePack`, approval hash, winner selection, index apply, or verification
+status. The Voyage key is read only by the FastAPI service from server-side environment/Secret
+Manager; the browser receives only sanitized retrieval results.
+
+The default local/prod-cost profile uses `voyage-4-lite` for embeddings and `rerank-2.5-lite`
+for reranking. If `VOYAGE_API_KEY` is absent, the UI says so honestly and the DBRE workflow still
+runs through deterministic diagnosis and hash-bound approval.
+
 ## Safety model
 
 | Guarantee | How |
@@ -139,6 +192,7 @@ controller-side and the production agent uses the native equivalents.
 | Backend | FastAPI · Python 3.12 · pymongo |
 | Frontend | Next.js (App Router) · TypeScript |
 | Data | MongoDB Atlas |
+| Retrieval memory | Voyage AI embeddings + reranking (DBRE-only, read-only) |
 | Hosting | Google Cloud Run · Secret Manager · Cloud Build |
 | Contract | EvidencePack v1 (frozen JSON schema) |
 
