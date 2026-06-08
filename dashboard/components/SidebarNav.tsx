@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Database,
   SquaresFour,
   MagnifyingGlass,
   TreeStructure,
@@ -16,6 +15,7 @@ import {
   List,
   X,
 } from "@phosphor-icons/react/dist/ssr";
+import { Logo } from "@/components/Logo";
 import type { Session } from "@/lib/session";
 import styles from "./SidebarNav.module.css";
 
@@ -83,8 +83,8 @@ export function SidebarNav({ session }: { session: Session }) {
       {/* mobile top bar with hamburger */}
       <div className={styles.mobileBar}>
         <div className={styles.mobileBrand}>
-          <Database weight="fill" size={20} className={styles.brandIcon} />
-          <span className={styles.brandName}>DBRE Console</span>
+          <Logo size={20} />
+          <span className={styles.brandName}>Sift</span>
         </div>
         <button
           ref={hamburgerRef}
@@ -100,9 +100,9 @@ export function SidebarNav({ session }: { session: Session }) {
 
       <aside id="sidebar-nav" className={styles.sidebar} data-open={open}>
         <div className={styles.brand}>
-          <Database weight="fill" size={22} className={styles.brandIcon} />
+          <Logo size={22} />
           <div className={styles.brandText}>
-            <span className={styles.brandName}>DBRE Console</span>
+            <span className={styles.brandName}>Sift</span>
             <span className={styles.brandTag}>
               {session.role === "dbre" ? "operator control plane" : "workload console"}
             </span>

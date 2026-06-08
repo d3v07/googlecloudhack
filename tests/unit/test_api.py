@@ -773,6 +773,17 @@ def test_run_rejects_unsafe_captured_filter() -> None:
     assert client.post("/run", json={"captured_query_id": "evil"}).status_code == 422
 
 
+def test_run_rejects_degenerate_captured_query() -> None:
+    # No filter and no sort -> empty ESR index -> undiagnosable. Must 422, not 500.
+    captured = {"bare": {"query": {"filter": {}, "sort": [], "limit": 20}}}
+    engine = FakeEngine()
+    client = TestClient(
+        create_app(FakePackStore([]), engine, workload_service=FakeWorkloadService(captured))
+    )
+    assert client.post("/run", json={"captured_query_id": "bare"}).status_code == 422
+    assert engine.queries == []  # rejected before reaching diagnosis
+
+
 def test_run_fixture_path_passes_no_query() -> None:
     engine = FakeEngine()
     client = TestClient(create_app(FakePackStore([]), engine))

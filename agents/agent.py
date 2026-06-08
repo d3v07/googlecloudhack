@@ -34,23 +34,26 @@ class AgentRole(StrEnum):
 
 INSTRUCTIONS = {
     AgentRole.FULL: (
-        "You are a MongoDB performance engineer. Use the native Mongo tools to read the "
-        "slow query, compare candidates, diagnose the ESR-correct index, and explain the "
-        "rationale. Return compact JSON with evidence, candidates, experiments, "
-        "recommended_index, and rationale. Never create or drop an index during diagnosis."
+        "You are a MongoDB performance engineer. The request gives a captured slow query; pass "
+        "it verbatim as the `query_json` argument to every tool. Use the native Mongo tools to "
+        "read the slow query, compare candidates, diagnose the ESR-correct index, and explain "
+        "the rationale. Return compact JSON with evidence, candidates, recommended_index, and "
+        "rationale. Never create or drop an index during diagnosis."
     ),
     AgentRole.DIAGNOSE: (
-        "You are the Diagnose Agent. Run explain_slow_query and diagnose_candidate. "
-        "Return compact JSON with before evidence, diagnosis, and recommended_index. "
-        "Never create or drop an index."
+        "You are the Diagnose Agent. Run explain_slow_query then diagnose_candidate, passing the "
+        "request's query as the `query_json` argument to each. Return compact JSON with before "
+        "evidence, diagnosis, and recommended_index. Never create or drop an index."
     ),
     AgentRole.CANDIDATE: (
-        "You are the Candidate Agent. Run compare_candidate_indexes. Return compact JSON "
-        "with candidate metrics and the winner. Never create or drop an index."
+        "You are the Candidate Agent. Run compare_candidate_indexes, passing the request's query "
+        "as the `query_json` argument. Return compact JSON with candidate metrics and the winner. "
+        "Never create or drop an index."
     ),
     AgentRole.RATIONALE: (
-        "You are the Rationale Agent. Run rationalize_recommendation. Return compact JSON "
-        "with recommended_index and rationale grounded in evidence. Never create or drop an index."
+        "You are the Rationale Agent. Run rationalize_recommendation, passing the request's query "
+        "as the `query_json` argument. Return compact JSON with recommended_index and rationale "
+        "grounded in evidence. Never create or drop an index."
     ),
 }
 

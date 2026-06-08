@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Sift rail mark">
+  <defs>
+    <linearGradient id="r" x1="60" y1="202" x2="201" y2="55" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5cc8e6"/>
+      <stop offset=".58" stop-color="#f5b342"/>
+      <stop offset="1" stop-color="#4ec98f"/>
+    </linearGradient>
+  </defs>
+  <path d="M58 70h84c25 0 45 20 45 45s-20 45-45 45H94" fill="none" stroke="#263544" stroke-width="18" stroke-linecap="round"/>
+  <path d="M58 116h86c25 0 45 20 45 45s-20 45-45 45H72" fill="none" stroke="#263544" stroke-width="18" stroke-linecap="round"/>
+  <path d="M58 70h84c25 0 45 20 45 45s-20 45-45 45H94" fill="none" stroke="url(#r)" stroke-width="9" stroke-linecap="round"/>
+  <path d="M58 116h86c25 0 45 20 45 45s-20 45-45 45H72" fill="none" stroke="#5cc8e6" stroke-width="9" stroke-linecap="round" opacity=".36"/>
+  <path d="M84 186 112 206 164 134" fill="none" stroke="#4ec98f" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="58" cy="70" r="12" fill="#5cc8e6"/>
+  <circle cx="58" cy="116" r="12" fill="#5cc8e6" opacity=".72"/>
+  <circle cx="187" cy="115" r="12" fill="#f5b342"/>
+</svg>

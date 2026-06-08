@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Sift signal mark">
+  <defs>
+    <linearGradient id="s" x1="61" y1="186" x2="193" y2="57" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5cc8e6"/>
+      <stop offset=".5" stop-color="#f5b342"/>
+      <stop offset="1" stop-color="#4ec98f"/>
+    </linearGradient>
+  </defs>
+  <path d="M74 66h108" stroke="#2a3340" stroke-width="18" stroke-linecap="round"/>
+  <path d="M58 116h140" stroke="#2a3340" stroke-width="18" stroke-linecap="round"/>
+  <path d="M74 166h108" stroke="#2a3340" stroke-width="18" stroke-linecap="round"/>
+  <path d="M86 206h72" stroke="#2a3340" stroke-width="18" stroke-linecap="round"/>
+  <path d="M75 66c18 0 31 13 42 40l16 40c12 29 28 40 53 40" fill="none" stroke="url(#s)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M58 116c34 0 55 13 72 40l12 19c14 22 30 31 57 31" fill="none" stroke="#5cc8e6" stroke-width="10" stroke-linecap="round" opacity=".38"/>
+  <circle cx="75" cy="66" r="12" fill="#5cc8e6"/>
+  <circle cx="132" cy="146" r="13" fill="#f5b342"/>
+  <circle cx="186" cy="186" r="12" fill="#4ec98f"/>
+</svg>

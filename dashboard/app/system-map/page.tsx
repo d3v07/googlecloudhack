@@ -41,6 +41,7 @@ export default async function SystemMapPage() {
         <div className={styles.tierRow}>
           <Box tone="green" title="Deterministic Controller" sub="winner selection · phase gates" />
           <Box tone="cyan" title="Agent Engine Roles" sub="diagnose · candidate · rationale (read-only)" />
+          <Box tone="cyan" title="Sift Memory" sub="Voyage retrieval · read-only DBRE context" />
           <Box tone="neutral" title="Evidence Ledger" sub="EvidencePack + event collections" />
         </div>
         <Down />

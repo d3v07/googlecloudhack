@@ -265,31 +265,20 @@ def _role_prompt(
     query_sort: list[tuple[str, int]],
     limit: int,
 ) -> str:
-    payload = {
-        "run_id": run_id,
-        "namespace": namespace,
-        "query": {"filter": query_filter, "sort": query_sort, "limit": limit},
+    query_json = json.dumps(
+        {"filter": query_filter, "sort": [[f, d] for f, d in query_sort], "limit": limit}
+    )
+    returns = {
+        "explain_slow_query": "`before` evidence and the tool name",
+        "compare_candidate_indexes": "candidate metrics, winner, and the tool name",
+        "diagnose_candidate": "`before`, `diagnosis`, `recommended_index`, and the tool name",
+        "rationalize_recommendation": "`recommended_index`, `rationale`, and the tool name",
     }
-    prompts = {
-        "explain_slow_query": (
-            "Run exactly one tool: explain_slow_query. Return compact JSON containing "
-            "`before` evidence and the tool name. Do not call any mutation tools."
-        ),
-        "compare_candidate_indexes": (
-            "Run exactly one tool: compare_candidate_indexes. Return compact JSON containing "
-            "candidate metrics, winner, and the tool name. Do not call any mutation tools."
-        ),
-        "diagnose_candidate": (
-            "Run exactly one tool: diagnose_candidate. Return compact JSON containing "
-            "`before`, `diagnosis`, `recommended_index`, and the tool name. Do not call "
-            "any mutation tools."
-        ),
-        "rationalize_recommendation": (
-            "Run exactly one tool: rationalize_recommendation. Return compact JSON containing "
-            "`recommended_index`, `rationale`, and the tool name. Do not call any mutation tools."
-        ),
-    }
-    return f"{prompts[tool_name]}\n\n{json.dumps(payload, sort_keys=True)}"
+    return (
+        f"Run exactly one tool: {tool_name}. Pass this exact JSON string as its `query_json` "
+        f"argument:\n{query_json}\n(run_id={run_id}, namespace={namespace}). Return compact JSON "
+        f"containing {returns[tool_name]}. Do not call any other tool or any mutation tool."
+    )
 
 
 @dataclass(frozen=True)
