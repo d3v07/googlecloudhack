@@ -87,13 +87,6 @@ read-only Agent Engine roles + Sift Memory → deterministic controller → Mong
 
 ![Sift system map](demo/screenshots/submission/05-system-map.png)
 
-### Mobile operator view
-
-The Run Review surface remains usable on a 390px mobile viewport, including long hashes, trace
-rows, and the Sift Memory panel.
-
-![Sift mobile run review](demo/screenshots/submission/06-run-review-mobile.png)
-
 ## The two-persona flow
 
 ```mermaid
