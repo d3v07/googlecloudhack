@@ -185,6 +185,12 @@ class VoyageClient:
         return ranked
 
 
+# Last successful Voyage retrieval per run_id. The service is rebuilt per request and the
+# free-tier Voyage key is rate-limited (3 RPM), so a transient 429 returns this real cached
+# result instead of degraded local guidance.
+_VOYAGE_CACHE: dict[str, "MemoryResponse"] = {}
+
+
 class VoyageMemoryService:
     def __init__(
         self,
@@ -246,7 +252,7 @@ class VoyageMemoryService:
                 for index, score in ranked[: self._config.top_k]
                 if 0 <= index < len(candidates)
             ]
-            return MemoryResponse(
+            response = MemoryResponse(
                 configured=True,
                 run_id=pack.run_id,
                 status="ok" if guidance else "empty",
@@ -257,7 +263,13 @@ class VoyageMemoryService:
                 retrieved_at=_now(),
                 message=None if guidance else "No relevant Sift Memory guidance found.",
             )
+            if guidance:
+                _VOYAGE_CACHE[pack.run_id] = response
+            return response
         except VoyageMemoryError:
+            cached = _VOYAGE_CACHE.get(pack.run_id)
+            if cached is not None:
+                return cached
             guidance = [
                 _guidance(doc, pack, 0.1, source="local") for doc in _local_docs(pack, docs)
             ]

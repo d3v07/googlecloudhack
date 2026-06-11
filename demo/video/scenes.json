@@ -40,7 +40,7 @@
       "id": "payoff",
       "voice": "dbre",
       "minDur": 34,
-      "text": "So I approve. Watch what happens. The backend builds the index, and then re-runs the query against the live collection. A hundred thousand documents scanned, collapses to twenty-five. The blocking sort is gone. Verified. Not because the A I said so, but because we re-ran the real query and measured it."
+      "text": "So I approve. Watch what happens. The backend builds the recommended index, then re-runs the query against the live collection. A hundred thousand documents scanned collapses to fifteen, exactly the rows it returns. The blocking sort is gone, and the query now answers in a couple of milliseconds. Verified. Not because the A I said so, but because we re-ran the real query and measured it."
     },
     {
       "id": "memory_close",

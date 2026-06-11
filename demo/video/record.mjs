@@ -8,7 +8,7 @@ const OUT = path.join(DIR, "out");
 const AUDIO = path.join(DIR, "audio");
 const FF = "/opt/homebrew/bin/ffmpeg";
 const FP = "/opt/homebrew/bin/ffprobe";
-const BASE = "http://localhost:3100";
+const BASE = "http://127.0.0.1:3100";
 const RUN_ID = JSON.parse(fs.readFileSync(path.join(DIR, "prestage.json"), "utf8")).run_id;
 const CRED = {
   dev: ["dev.trivedi", "a5rGdW8qTGoGCF23"],
@@ -67,19 +67,19 @@ async function panTo(page, toY, ms = 2400) {
     await sleep(ms / steps);
   }
 }
-async function selTop(page, sel) { return await page.evaluate((s) => { const el = document.querySelector(s); return el ? window.scrollY + el.getBoundingClientRect().top : null; }, sel); }
+async function selTop(page, sel) { try { const loc = page.locator(sel).first(); if (!(await loc.count())) return null; const bb = await loc.boundingBox().catch(() => null); if (!bb) return null; const sy = await page.evaluate(() => window.scrollY); return sy + bb.y; } catch { return null; } }
 async function panToSel(page, sel, ms = 2400, margin = 80) { const y = await selTop(page, sel); if (y == null) { await sleep(ms); return; } await panTo(page, Math.max(0, y - margin), ms); }
 
 async function login(page, who, hero = 0) {
   const [u, pw] = CRED[who];
-  await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
   await sleep(600 + hero);
   await typeInto(page, 'input[autocomplete="username"]', u);
   await moveSel(page, 'input[type="password"]');
   await page.locator('input[type="password"]').first().fill(pw);
   await sleep(260);
   await clickSel(page, 'button[type="submit"]');
-  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForLoadState("domcontentloaded").catch(() => {});
   await sleep(1100);
 }
 
@@ -100,13 +100,13 @@ const ACTIONS = {
   dbre_queue: async (page, fill) => {
     await panTo(page, 0, 500); await clickSel(page, 'button[aria-label="Sign out"]'); await sleep(800);
     await login(page, "dbre");
-    await page.goto(`${BASE}/dbre`, { waitUntil: "networkidle" }); await sleep(1100);
+    await page.goto(`${BASE}/dbre`, { waitUntil: "domcontentloaded" }); await sleep(1100);
     await fill([[60, 0.4], [260, 0.6]]);
   },
   diagnose: async (page, fill) => {
     await pulseSel(page, "tr:has-text('Phone') button:has-text('Diagnose'), button:has-text('Diagnose')");
     await sleep(400);
-    await page.goto(`${BASE}/run-review?run_id=${RUN_ID}`, { waitUntil: "networkidle" }); await sleep(1300);
+    await page.goto(`${BASE}/run-review?run_id=${RUN_ID}`, { waitUntil: "domcontentloaded" }); await sleep(1300);
     const roles = (await selTop(page, "text=ROLES")) ?? 560;
     const tools = (await selTop(page, "text=TOOL CALLS")) ?? 1050;
     await fill([[roles - 70, 0.45], [tools - 60, 0.55]]);
@@ -117,19 +117,23 @@ const ACTIONS = {
     await fill([[0, 0.5], [120, 0.5]]);
   },
   payoff: async (page, fill) => {
-    await panTo(page, 0, 500);
+    await panTo(page, 0, 600);
+    // LIVE approve: click the gate -> POST /api/decision -> apply_and_verify (~2s) -> VERIFIED
     await clickSel(page, 'button:has-text("Approve this evidence hash")');
-    await sleep(7500); // backend builds the gcrah_rec_ index + re-explains -> VERIFIED
-    const ba = (await selTop(page, "text=/before\\s*\\/\\s*after/i")) ?? 1700;
-    await panTo(page, ba - 70, 2600); // smooth reveal of the collapse
-    await fill([[ba - 70, 1]]); // gentle hold/drift on 100,377 -> 15
+    await page.waitForSelector("text=/Approved mutation was applied and verified/i", { timeout: 15000 }).catch(() => {});
+    await sleep(1200);
+    const ba = (await selTop(page, "text=/before\\s*\\/\\s*after/i")) ?? 1791;
+    const y = Math.max(0, ba - 90);
+    await panTo(page, y, 3200); // smooth reveal of the live 100,377 -> 15 collapse
+    await fill([[y, 1]]); // hold on the verified collapse
   },
   memory_close: async (page, fill) => {
-    await panToSel(page, 'section[aria-label="Sift Memory"]', 2400, 70);
-    await fill([[null, 0.5]]); // dwell on the live Voyage results
-    await page.goto(`${BASE}/system-map`, { waitUntil: "networkidle" }); await sleep(1000);
-    await panTo(page, 80, 1400);
-    await fill([[80, 0.5], [360, 0.5]]);
+    // stay on the run-review page and reveal the live Sift Memory panel: Voyage-ranked, scored, read-only
+    const memTop = (await selTop(page, 'section[aria-label="Sift Memory"]')) ?? 1969;
+    await panTo(page, Math.max(0, memTop - 60), 2200); // reveal the "Sift Memory / 3 RESULTS" header
+    const card = (await selTop(page, 'section[aria-label="Sift Memory"] >> text=/Blocking SORT with ESR index order/i')) ?? (memTop + 877);
+    const y = Math.max(0, card - 420); // frame the 3 ranked Voyage results (scores 0.82 / 0.71 / 0.67)
+    await fill([[Math.max(0, memTop - 60), 0.28], [y, 0.72]]); // dwell on header, descend and hold on the scores
   },
 };
 
@@ -137,6 +141,8 @@ const browser = await chromium.launch({ headless: true });
 const ctx = await browser.newContext({ viewport: { width: W, height: H }, recordVideo: { dir: OUT, size: { width: W, height: H } }, deviceScaleFactor: 1 });
 await ctx.addInitScript(CURSOR_INIT);
 const page = await ctx.newPage();
+page.setDefaultTimeout(15000);
+page.setDefaultNavigationTimeout(20000);
 
 const offsets = [];
 const t0 = now();
@@ -156,7 +162,9 @@ for (const s of scenes) {
       else await panTo(page, y, ms);
     }
   };
-  try { await ACTIONS[s.id](page, fill); } catch (e) { console.error(`  action error ${s.id}:`, e.message); }
+  // cap each scene action at its narration length so one slow live call can't blow up the timeline
+  const cap = new Promise((res) => setTimeout(res, s.dur * 1000));
+  try { await Promise.race([ACTIONS[s.id](page, fill), cap]); } catch (e) { console.error(`  action error ${s.id}:`, e.message); }
   const left = s.dur * 1000 - (now() - sceneStart);
   if (left > 0) await sleep(left);
 }
