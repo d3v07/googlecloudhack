@@ -1,0 +1,50 @@
+[
+  {
+    "id": "intro",
+    "start": 0,
+    "dur": 16.22,
+    "audioDur": 15.42
+  },
+  {
+    "id": "dev_query",
+    "start": 16.22,
+    "dur": 20,
+    "audioDur": 17.55
+  },
+  {
+    "id": "aakash",
+    "start": 36.22,
+    "dur": 16,
+    "audioDur": 11.05
+  },
+  {
+    "id": "dbre_queue",
+    "start": 52.22,
+    "dur": 18.4,
+    "audioDur": 17.6
+  },
+  {
+    "id": "diagnose",
+    "start": 70.62,
+    "dur": 24,
+    "audioDur": 20.94
+  },
+  {
+    "id": "controller",
+    "start": 94.63,
+    "dur": 16.68,
+    "audioDur": 15.88
+  },
+  {
+    "id": "gate",
+    "start": 111.31,
+    "dur": 22,
+    "audioDur": 17.46
+  },
+  {
+    "id": "memory_close",
+    "start": 133.31,
+    "dur": 26,
+    "audioDur": 19.41
+  }
+]
