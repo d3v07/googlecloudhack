@@ -81,7 +81,7 @@ const scenes = [
     mediaDuration: 18.04,
     audio: "audio/06-safety-memory.mp3",
     accent: "5ec9e8",
-    bullets: ["Voyage retrieval context", "DBRE-only", "Never changes the EvidencePack"],
+    bullets: ["Runbook retrieval context", "DBRE-only", "Never changes the EvidencePack"],
   },
   {
     id: "approval",
