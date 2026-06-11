@@ -1,5 +1,7 @@
+import pytest
 from fastapi.testclient import TestClient
 
+from api import memory as memory_module
 from api.memory import (
     MemoryDocument,
     VoyageMemoryConfig,
@@ -20,6 +22,14 @@ from controller.schemas import (
     Recommendation,
     Severity,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_voyage_cache():
+    """Isolate the module-level last-good Voyage cache between tests."""
+    memory_module._VOYAGE_CACHE.clear()
+    yield
+    memory_module._VOYAGE_CACHE.clear()
 
 
 def _minimal_pack(run_id: str = "run-memory") -> EvidencePack:
