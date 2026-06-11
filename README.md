@@ -62,7 +62,8 @@ verification proves.**
 ### User workload console
 
 Dev Trivedi and Aakash Singh run guided, read-only MongoDB workloads against the live demo
-collection. Each run is captured with `explain` evidence and user attribution.
+collection. Each run is captured with `explain` evidence and user attribution — here a phone-orders
+query that scans 100,377 documents to return 15 via a blocking in-memory sort.
 
 ![Sift workload console](demo/screenshots/submission/02-workload-console.png)
 
@@ -75,17 +76,40 @@ over-scan ratio, keys examined, and the user who caused the query.
 
 ### Hash-bound run review
 
-Run Review shows the approval gate, full evidence hash, three read-only Agent Engine roles,
-four read-only diagnosis tools, deterministic validation, and Sift Memory as read-only context.
+Run Review shows three read-only Agent Engine roles (diagnose, candidate, rationale) and four
+read-only diagnosis tools, the deterministic ESR validation, and the full evidence hash that the
+human approval is bound to.
 
 ![Sift run review](demo/screenshots/submission/04-run-review.png)
+
+### Human approval gate
+
+Nothing touches the database until a human approves the exact evidence hash. Deterministic Python
+selects the index and computes the hash; the AI only recommends.
+
+![Sift approval gate](demo/screenshots/submission/05-approval-gate.png)
+
+### Verified fix — proof, not promises
+
+On approval the backend builds the recommended index and re-runs the real query: docs examined
+collapses **100,377 → 15**, the blocking sort is gone, and the run flips to VERIFIED — because the
+query was re-measured, not because the AI said so.
+
+![Sift verified collapse](demo/screenshots/submission/06-verified-collapse.png)
+
+### Sift Memory — Voyage AI retrieval
+
+Read-only runbook context for this exact failure, retrieved and ranked by Voyage AI (scored
+0.83 / 0.72 / 0.67). Advisory only — never a decision-maker.
+
+![Sift Memory Voyage retrieval](demo/screenshots/submission/07-sift-memory.png)
 
 ### System map
 
 The system map makes the safety boundary explicit: browser dashboard → Cloud Run API →
 read-only Agent Engine roles + Sift Memory → deterministic controller → MongoDB + ledger.
 
-![Sift system map](demo/screenshots/submission/05-system-map.png)
+![Sift system map](demo/screenshots/submission/08-system-map.png)
 
 ## The two-persona flow
 
