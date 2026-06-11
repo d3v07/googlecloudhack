@@ -1,53 +1,53 @@
 {
   "scenes": [
     {
-      "id": "intro",
-      "voice": "dev",
-      "dur": 16.22,
-      "audioDur": 15.42
+      "id": "hook",
+      "voice": "dbre",
+      "dur": 18.12,
+      "audioDur": 17.32
     },
     {
       "id": "dev_query",
       "voice": "dev",
-      "dur": 20,
-      "audioDur": 17.55
+      "dur": 22,
+      "audioDur": 20.85
     },
     {
       "id": "aakash",
       "voice": "aakash",
-      "dur": 16,
-      "audioDur": 11.05
+      "dur": 18,
+      "audioDur": 16.49
     },
     {
       "id": "dbre_queue",
       "voice": "dbre",
-      "dur": 18.4,
-      "audioDur": 17.6
+      "dur": 18,
+      "audioDur": 16.67
     },
     {
       "id": "diagnose",
       "voice": "dbre",
       "dur": 24,
-      "audioDur": 20.94
-    },
-    {
-      "id": "controller",
-      "voice": "dbre",
-      "dur": 16.68,
-      "audioDur": 15.88
+      "audioDur": 21.08
     },
     {
       "id": "gate",
       "voice": "dbre",
       "dur": 22,
-      "audioDur": 17.46
+      "audioDur": 20.39
+    },
+    {
+      "id": "payoff",
+      "voice": "dbre",
+      "dur": 34,
+      "audioDur": 23.87
     },
     {
       "id": "memory_close",
       "voice": "dbre",
-      "dur": 26,
-      "audioDur": 19.41
+      "dur": 26.76,
+      "audioDur": 25.96
     }
   ],
-  "total": 159.3
+  "total": 182.9
 }

@@ -66,8 +66,8 @@ const scenes = [
     duration: 28,
     speaker: "DBRE Operator",
     title: "3 roles / 4 read-only tools",
-    media: "recordings/04-run-review-system.mp4",
-    mediaDuration: 18.04,
+    media: "screens/run-review.png",
+    cropY: 430,
     audio: "audio/05-agents.mp3",
     accent: "31d489",
     bullets: ["Diagnose Agent", "Candidate Agent", "Rationale Agent", "Agents never mutate"],
@@ -163,9 +163,10 @@ const renderScene = async (scene, index) => {
   const bulletFiles = await Promise.all(scene.bullets.map((b, i) => textPath(scene.id, `bullet-${i}`, `- ${b}`)));
   const urlFile = await textPath(scene.id, "url", "gcrah-dashboard-2vbnam7yma-uc.a.run.app");
 
+  const cropExpression = scene.cropY === undefined ? `crop=${width}:${height}` : `crop=${width}:${height}:0:${scene.cropY}`;
   const baseFilter = isVideo
     ? `[0:v]setpts=${scene.duration / scene.mediaDuration}*PTS,trim=duration=${scene.duration},fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1[base]`
-    : `[0:v]trim=duration=${scene.duration},fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1[base]`;
+    : `[0:v]trim=duration=${scene.duration},fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=increase,${cropExpression},setsar=1[base]`;
 
   const panelX = isVideo ? 64 : 82;
   const panelY = isVideo ? 798 : 82;

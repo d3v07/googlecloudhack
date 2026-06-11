@@ -1,52 +1,52 @@
 {
   "scenes": [
     {
-      "id": "intro",
-      "voice": "dev",
-      "minDur": 15,
-      "text": "This is Sift, a two-persona database reliability product. Real developers generate live MongoDB workload, and one D B R E triages it with A I that only ever recommends. I'm Dev. Let me sign in and show you."
+      "id": "hook",
+      "voice": "dbre",
+      "minDur": 16,
+      "text": "Every database has slow queries. Most teams find out from an angry user, or a two a.m. page. Sift finds them from the evidence, and fixes them safely. Let me show you, with two real developers and one D B R E."
     },
     {
       "id": "dev_query",
       "voice": "dev",
-      "minDur": 20,
-      "text": "From my workload console I run a real, read-only query against our live Atlas collection. And it's slow. A blocking, in-memory sort: fifty thousand documents scanned just to return twenty. Sift captures that explain evidence and attributes it to me, automatically."
+      "minDur": 22,
+      "text": "I'm Dev. From my console I run a real, read-only query against our live Atlas collection. Phone orders, for older customers. And it's slow. A blocking, in-memory sort: a hundred thousand documents scanned, just to return fifteen. Sift captures the real explain plan and tags it to me."
     },
     {
       "id": "aakash",
       "voice": "aakash",
-      "minDur": 16,
-      "text": "I'm Aakash, another developer. I run my own workload. Same story, captured and attributed to me. Real queries, real execution evidence, real people behind every one."
+      "minDur": 18,
+      "text": "I'm Aakash, and I run a completely different query. Seattle buyers, a different filter, a different sort. Slow in its own way. Two developers, two different problems, both captured automatically, with exactly who ran them."
     },
     {
       "id": "dbre_queue",
       "voice": "dbre",
       "minDur": 18,
-      "text": "Now I'm the D B R E. I don't guess, and I don't stare at dashboards. I see every slow query my users actually ran, ranked by real explain evidence, and each one is attributed to the person who ran it."
+      "text": "Now I'm the D B R E. No guessing, no staring at dashboards. Every slow query my users actually ran, ranked by real explain evidence, over-scan and blocking sorts, and attributed to the person behind each one."
     },
     {
       "id": "diagnose",
       "voice": "dbre",
       "minDur": 24,
-      "text": "I pick the worst offender and diagnose it. Three Gemini Agent Engine roles, Diagnose, Candidate, and Rationale, run four read-only tools to explain the plan, compare candidate indexes, and reason about the fix. Every one of them reads. None of them can write."
-    },
-    {
-      "id": "controller",
-      "voice": "dbre",
-      "minDur": 15,
-      "text": "Because the agents only advise. Deterministic Python is the decision-maker. It selects the index by the Equality, Sort, Range rule, and validates that the agent's proposal matches, exactly."
+      "text": "I diagnose the worst offender. Three Gemini Agent Engine roles, Diagnose, Candidate, and Rationale, run four read-only tools. They explain the plan, compare candidate indexes, and reason about the fix. Every one of them reads. Not one of them can write."
     },
     {
       "id": "gate",
       "voice": "dbre",
       "minDur": 22,
-      "text": "Then it computes an evidence hash and binds my approval to it. Nothing touches the database until I approve this precise hash. The apply, and the re-explain that verifies it, are backend-only. The agents never get near a mutation."
+      "text": "Because an agent can be wrong. So deterministic Python is the decision-maker. It selects the index by the Equality, Sort, Range rule, computes an evidence hash, and binds my approval to that exact hash. Nothing touches the database until I approve it."
+    },
+    {
+      "id": "payoff",
+      "voice": "dbre",
+      "minDur": 34,
+      "text": "So I approve. Watch what happens. The backend builds the index, and then re-runs the query against the live collection. A hundred thousand documents scanned, collapses to twenty-five. The blocking sort is gone. Verified. Not because the A I said so, but because we re-ran the real query and measured it."
     },
     {
       "id": "memory_close",
       "voice": "dbre",
       "minDur": 26,
-      "text": "And Sift Memory adds Voyage-powered retrieval. Read-only operator context, just for me, never a decision-maker. Real users, real evidence, A I that recommends, deterministic Python that decides, and a human who approves. That's Sift."
+      "text": "And throughout, Sift Memory gives me read-only context. Voyage embeddings retrieve the right runbook guidance for this exact failure, ranked, scored, never a decision-maker. Real users, real evidence. A I that recommends, deterministic Python that decides, a human who approves, and proof that it worked. That's Sift."
     }
   ]
 }
