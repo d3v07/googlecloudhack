@@ -12,6 +12,10 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifyToken(token) : null;
 
+  if (pathname === "/guest") {
+    return NextResponse.next();
+  }
+
   if (pathname === "/login") {
     return session
       ? NextResponse.redirect(new URL(roleHome(session.role), req.url))
