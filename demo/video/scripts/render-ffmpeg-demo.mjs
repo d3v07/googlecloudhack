@@ -34,7 +34,7 @@ const scenes = [
     speaker: "Dev Trivedi",
     title: "Dev runs a live workload",
     media: "recordings/01-dev-workload.mp4",
-    mediaDuration: 7.56,
+    mediaDuration: 7.92,
     audio: "audio/02-dev.mp3",
     accent: "5ec9e8",
     bullets: ["Clicks a workload preset", "Runs against live MongoDB", "Explain evidence is captured"],
@@ -45,7 +45,7 @@ const scenes = [
     speaker: "Aakash Singh",
     title: "Aakash creates another signal",
     media: "recordings/02-aakash-workload.mp4",
-    mediaDuration: 7.32,
+    mediaDuration: 7.6,
     audio: "audio/03-aakash.mp3",
     accent: "5ec9e8",
     bullets: ["Second user", "Read-only capped query", "Attribution preserved"],
@@ -56,7 +56,7 @@ const scenes = [
     speaker: "DBRE Operator",
     title: "DBRE queue ranks evidence",
     media: "recordings/03-dbre-diagnose.mp4",
-    mediaDuration: 29,
+    mediaDuration: 10.68,
     audio: "audio/04-queue.mp3",
     accent: "f4b63d",
     bullets: ["Blocking SORT", "Over-scan ratio", "Caused by Dev / Aakash"],
@@ -67,7 +67,7 @@ const scenes = [
     speaker: "DBRE Operator",
     title: "3 roles / 4 read-only tools",
     media: "recordings/04-run-review-system.mp4",
-    mediaDuration: 14.44,
+    mediaDuration: 18.04,
     audio: "audio/05-agents.mp3",
     accent: "31d489",
     bullets: ["Diagnose Agent", "Candidate Agent", "Rationale Agent", "Agents never mutate"],
@@ -78,7 +78,7 @@ const scenes = [
     speaker: "DBRE Operator",
     title: "Sift Memory stays out-of-band",
     media: "recordings/04-run-review-system.mp4",
-    mediaDuration: 14.44,
+    mediaDuration: 18.04,
     audio: "audio/06-safety-memory.mp3",
     accent: "5ec9e8",
     bullets: ["Voyage retrieval context", "DBRE-only", "Never changes the EvidencePack"],
@@ -89,7 +89,7 @@ const scenes = [
     speaker: "DBRE Operator",
     title: "Human approves the exact hash",
     media: "recordings/04-run-review-system.mp4",
-    mediaDuration: 14.44,
+    mediaDuration: 18.04,
     audio: "audio/07-approval.mp3",
     accent: "f4b63d",
     bullets: ["Approve this evidence hash", "Mutation blocked before approval", "Backend keeps credentials"],
@@ -100,7 +100,7 @@ const scenes = [
     speaker: "DBRE Operator",
     title: "Backend applies, then re-explains",
     media: "recordings/04-run-review-system.mp4",
-    mediaDuration: 14.44,
+    mediaDuration: 18.04,
     audio: "audio/08-verify.mp3",
     accent: "31d489",
     bullets: ["SORT removed", "Selected index evidenced", "Metrics improve"],
@@ -167,22 +167,34 @@ const renderScene = async (scene, index) => {
     ? `[0:v]setpts=${scene.duration / scene.mediaDuration}*PTS,trim=duration=${scene.duration},fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1[base]`
     : `[0:v]trim=duration=${scene.duration},fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},setsar=1[base]`;
 
-  const panelH = scene.title === "Sift" ? 560 : 420;
+  const panelX = isVideo ? 64 : 82;
+  const panelY = isVideo ? 798 : 82;
+  const panelW = isVideo ? 1160 : 740;
+  const panelH = isVideo ? 242 : scene.title === "Sift" ? 560 : 420;
+  const speakerX = panelX + 34;
+  const speakerY = isVideo ? panelY + 28 : 116;
+  const titleX = panelX + 34;
+  const titleY = isVideo ? panelY + 66 : 162;
+  const titleSize = isVideo ? 42 : scene.title === "Sift" ? 92 : 54;
+  const bulletX = panelX + 40;
+  const bulletStartY = isVideo ? panelY + 136 : scene.title === "Sift" ? 326 : 284;
+  const bulletSpacing = isVideo ? 29 : scene.title === "Sift" ? 52 : 48;
+  const bulletSize = isVideo ? 24 : 30;
   const filters = [
     baseFilter,
-    `[base]drawbox=x=0:y=0:w=${width}:h=${height}:color=0x070a0f@0.38:t=fill[shade]`,
-    `[shade]drawbox=x=82:y=82:w=740:h=${panelH}:color=0x0d121b@0.88:t=fill[panel]`,
-    `[panel]drawbox=x=82:y=82:w=740:h=${panelH}:color=0x${scene.accent}@0.76:t=3[panelBorder]`,
-    drawText({ input: "panelBorder", output: "speaker", textFile: speakerFile, x: 116, y: 116, size: 28, color: scene.accent, fontFile: boldFont }),
-    drawText({ input: "speaker", output: "title", textFile: titleFile, x: 116, y: 162, size: scene.title === "Sift" ? 92 : 54, color: "ffffff", fontFile: boldFont }),
+    `[base]drawbox=x=0:y=0:w=${width}:h=${height}:color=0x070a0f@${isVideo ? "0.12" : "0.38"}:t=fill[shade]`,
+    `[shade]drawbox=x=${panelX}:y=${panelY}:w=${panelW}:h=${panelH}:color=0x0d121b@${isVideo ? "0.82" : "0.88"}:t=fill[panel]`,
+    `[panel]drawbox=x=${panelX}:y=${panelY}:w=${panelW}:h=${panelH}:color=0x${scene.accent}@0.76:t=3[panelBorder]`,
+    drawText({ input: "panelBorder", output: "speaker", textFile: speakerFile, x: speakerX, y: speakerY, size: isVideo ? 24 : 28, color: scene.accent, fontFile: boldFont }),
+    drawText({ input: "speaker", output: "title", textFile: titleFile, x: titleX, y: titleY, size: titleSize, color: "ffffff", fontFile: boldFont }),
     ...bulletFiles.map((file, i) =>
       drawText({
         input: i === 0 ? "title" : `bullet${i - 1}`,
         output: `bullet${i}`,
         textFile: file,
-        x: 122,
-        y: scene.title === "Sift" ? 326 + i * 52 : 284 + i * 48,
-        size: 30,
+        x: bulletX,
+        y: bulletStartY + i * bulletSpacing,
+        size: bulletSize,
         color: "d9e7f2",
       }),
     ),

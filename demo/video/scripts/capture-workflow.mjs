@@ -285,7 +285,7 @@ async function main() {
     await page.waitForURL(/\/runs\//, { timeout: 90000 });
     runId = new URL(page.url()).pathname.split("/").filter(Boolean).pop() ?? "";
     await installCursor(page);
-    await page.getByText("3 read-only agent roles", { exact: true }).waitFor({ timeout: 25000 });
+    await page.getByText(/Approve this evidence hash/i).waitFor({ timeout: 30000 });
     await wait(3500);
   });
 
