@@ -107,20 +107,23 @@ const ACTIONS = {
     await scrollTo(page, 640);
     await scrollTo(page, 1040);
   },
-  gate: async (page) => { await scrollTo(page, 120, 1000); await moveSel(page, 'button:has-text("Approve this evidence hash")'); await sleep(900); },
+  gate: async (page) => { await scrollTo(page, 0, 1000); await moveSel(page, 'button:has-text("Approve this evidence hash")'); await sleep(900); },
   payoff: async (page) => {
     await clickSel(page, 'button:has-text("Approve this evidence hash")');
-    await sleep(9000); // backend builds index + re-explains
-    await scrollTo(page, 120, 900);
-    await scrollTo(page, 1640, 1200); // before/after explain-plan diff
-    await sleep(1500);
+    await sleep(10000); // backend builds the gcrah_rec_ index + re-explains -> VERIFIED
+    await scrollTo(page, 0, 3000); // top: gate flips to VERIFIED, stage advances to VERIFY
+    await page.locator("text=/before\\s*\\/\\s*after/i").first().scrollIntoViewIfNeeded().catch(() => {});
+    await sleep(700);
+    await page.evaluate(() => window.scrollBy({ top: -70, behavior: "smooth" }));
+    await sleep(1500); // hold on the 100,377 -> 15 collapse (remainder padded by scene dur)
   },
   memory_close: async (page) => {
-    await scrollTo(page, 1180, 1200); // Sift Memory panel (voyage)
-    await sleep(3500);
+    await page.locator('section[aria-label="Sift Memory"]').first().scrollIntoViewIfNeeded().catch(() => {});
+    await page.evaluate(() => window.scrollBy({ top: -40, behavior: "smooth" }));
+    await sleep(12500); // hold on the live Voyage results (3 scored hits)
     await page.goto(`${BASE}/system-map`, { waitUntil: "networkidle" });
-    await sleep(1200);
-    await scrollTo(page, 200);
+    await sleep(1500);
+    await scrollTo(page, 220, 1200); // architecture close
   },
 };
 

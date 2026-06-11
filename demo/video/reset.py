@@ -7,7 +7,7 @@ import os
 
 from pymongo import MongoClient
 
-from controller.demo_fixture import COLL, DB
+DB, COLL = "sample_supplies", "sales_agent_demo"
 
 conn = os.environ.get("MDB_MCP_CONNECTION_STRING") or os.environ.get("MONGODB_TARGET_URI")
 assert conn, "no MDB connection string in env"
