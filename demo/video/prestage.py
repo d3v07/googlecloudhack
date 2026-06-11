@@ -1,4 +1,6 @@
-import json, time, urllib.request as u, urllib.error
+import json
+import time
+import urllib.request as u
 
 BASE = "http://127.0.0.1:8000"
 TOK = "local-e2e-token"
