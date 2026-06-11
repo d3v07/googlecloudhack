@@ -1,0 +1,52 @@
+{
+  "scenes": [
+    {
+      "id": "intro",
+      "voice": "dev",
+      "minDur": 15,
+      "text": "This is Sift, a two-persona database reliability product. Real developers generate live MongoDB workload, and one D B R E triages it with A I that only ever recommends. I'm Dev. Let me sign in and show you."
+    },
+    {
+      "id": "dev_query",
+      "voice": "dev",
+      "minDur": 20,
+      "text": "From my workload console I run a real, read-only query against our live Atlas collection. And it's slow. A blocking, in-memory sort: fifty thousand documents scanned just to return twenty. Sift captures that explain evidence and attributes it to me, automatically."
+    },
+    {
+      "id": "aakash",
+      "voice": "aakash",
+      "minDur": 16,
+      "text": "I'm Aakash, another developer. I run my own workload. Same story, captured and attributed to me. Real queries, real execution evidence, real people behind every one."
+    },
+    {
+      "id": "dbre_queue",
+      "voice": "dbre",
+      "minDur": 18,
+      "text": "Now I'm the D B R E. I don't guess, and I don't stare at dashboards. I see every slow query my users actually ran, ranked by real explain evidence, and each one is attributed to the person who ran it."
+    },
+    {
+      "id": "diagnose",
+      "voice": "dbre",
+      "minDur": 24,
+      "text": "I pick the worst offender and diagnose it. Three Gemini Agent Engine roles, Diagnose, Candidate, and Rationale, run four read-only tools to explain the plan, compare candidate indexes, and reason about the fix. Every one of them reads. None of them can write."
+    },
+    {
+      "id": "controller",
+      "voice": "dbre",
+      "minDur": 15,
+      "text": "Because the agents only advise. Deterministic Python is the decision-maker. It selects the index by the Equality, Sort, Range rule, and validates that the agent's proposal matches, exactly."
+    },
+    {
+      "id": "gate",
+      "voice": "dbre",
+      "minDur": 22,
+      "text": "Then it computes an evidence hash and binds my approval to it. Nothing touches the database until I approve this precise hash. The apply, and the re-explain that verifies it, are backend-only. The agents never get near a mutation."
+    },
+    {
+      "id": "memory_close",
+      "voice": "dbre",
+      "minDur": 26,
+      "text": "And Sift Memory adds Voyage-powered retrieval. Read-only operator context, just for me, never a decision-maker. Real users, real evidence, A I that recommends, deterministic Python that decides, and a human who approves. That's Sift."
+    }
+  ]
+}

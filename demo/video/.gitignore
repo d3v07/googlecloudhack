@@ -1,0 +1,6 @@
+node_modules/
+out/
+public/audio/*.mp3
+public/recordings/*.webm
+public/recordings/*.mp4
+*.log

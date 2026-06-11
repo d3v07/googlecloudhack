@@ -1,0 +1,31 @@
+{
+  "name": "sift-demo-video",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "capture": "node --env-file=../../.env scripts/capture-workflow.mjs",
+    "voiceover": "node --env-file=../../.env scripts/generate-voiceover.mjs",
+    "still": "remotion still src/index.tsx SiftDemo out/sift-demo-thumbnail.png --frame=5360 --overwrite",
+    "render": "node scripts/render-ffmpeg-demo.mjs",
+    "verify": "node scripts/verify-video.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.379",
+    "@remotion/media": "^4.0.379",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.379"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.7",
+    "ffmpeg-static": "^5.3.0",
+    "playwright": "^1.60.0",
+    "typescript": "^5.7.3"
+  },
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
